@@ -667,6 +667,8 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+
   const handleRun = async () => {
     if (!code.trim() || !uploadedTestcases.length) {
       showToast("warning", t.toastMissingData, t.toastMissingDataMsg);
@@ -679,7 +681,8 @@ export default function App() {
       formData.append("language", language);
       formData.append("code", code);
       files.forEach(f => formData.append("files", f));
-      const res = await fetch("/api/judge", { method: "POST", body: formData });
+      
+      const res = await fetch(`${API_BASE_URL}/api/judge`, { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || t.toastError);
       setResult(data);
