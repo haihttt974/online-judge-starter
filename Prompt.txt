@@ -1,0 +1,66 @@
+Mục tiêu:
+Tạo ra một giao diện người dùng (UI) tối giản, hiện đại, chuyên nghiệp cho một trang web, bao gồm các phần tử chính như header, content, footer, modal, button, cards, và toasts, với đầy đủ hiệu ứng tương tác như hover, click, animation, và chuyển đổi theme (light/dark).
+
+Style tổng thể:
+- Tối giản: Sử dụng ít chi tiết, giảm thiểu độ phức tạp, chỉ giữ lại những yếu tố cần thiết nhất để tạo ra một giao diện dễ sử dụng, dễ hiểu.
+- Chuyên nghiệp và hiện đại: Sử dụng các yếu tố thiết kế hiện đại, thanh thoát, không quá cầu kỳ nhưng vẫn đảm bảo tính thẩm mỹ cao.
+- Tương tác mượt mà: Cung cấp các phản hồi trực quan (visual feedback) với các hiệu ứng mượt mà khi người dùng tương tác với các thành phần như nút, thẻ, modal, v.v.
+
+1. Màu sắc (Color Scheme):
+- Chế độ tối (Dark mode): 
+  - Nền: #0b0f14 (gần như đen)
+  - Thẻ (Card): #121720 (xám đen)
+  - Văn bản chính: #e6eaf0 (trắng mềm)
+  - Văn bản phụ: #7c8596 (xám xanh nhẹ)
+  - Accent: #5eead4 (cyan mát mắt)
+- Chế độ sáng (Light mode): 
+  - Nền: #f3f6fb (xám sáng)
+  - Thẻ (Card): #ffffff (trắng)
+  - Văn bản chính: #0f172a (xám đậm)
+  - Văn bản phụ: #64748b (xám xanh nhạt)
+  - Accent: #0ea5e9 (xanh dương sạch)
+
+2. Typography:
+- Font: Sử dụng font "Inter" với các độ dày khác nhau (300, 400, 500, 600) để tạo độ phân cấp hợp lý.
+- Cỡ chữ: 
+  - Tiêu đề chính: 3rem
+  - Thân bài (paragraph): 1.25rem
+  - Nút: 16px
+- Spacing: Khoảng cách giữa các dòng và các phần tử được tối ưu để tạo không gian thoáng đãng, dễ đọc.
+
+3. Các thành phần giao diện:
+
+- Header: 
+  - Thiết kế sticky với logo phía trái và các nút điều hướng ở bên phải.
+  - Các nút bao gồm: Toggle Theme (chuyển đổi giữa chế độ sáng/tối) và Show Modal (mở modal).
+
+- Content (Nội dung chính):
+  - Phần nội dung trung tâm với tiêu đề lớn h1 (3rem), mô tả chi tiết về trang web và một số thẻ card giới thiệu các tính năng.
+  - Grid layout để sắp xếp các thẻ, hỗ trợ responsive cho các kích thước màn hình khác nhau.
+
+- Cards:
+  - Các card với đường viền mỏng (1px) và bo góc 4px. Các thẻ này có hiệu ứng khi hover (dịch chuyển nhẹ lên trên và đổ bóng).
+  - Chứa thông tin chính về các tính năng, sử dụng màu sắc nền khác nhau trong dark/light mode.
+
+- Modal:
+  - Thiết kế modal với hiệu ứng "scale" (mở modal từ nhỏ đến lớn) và "fade" khi đóng.
+  - Modal có nền mờ (backdrop) để làm nổi bật nội dung trong modal.
+
+- Buttons (Nút):
+  - Các nút với bo góc 4px, dễ nhìn và phản hồi trực quan khi hover (màu nền thay đổi nhẹ).
+  - Bao gồm các trạng thái: default, hover, active, disabled.
+
+- Toast Notifications:
+  - Hiển thị thông báo nhỏ với màu nền thẻ tương ứng với hệ thống dark/light mode.
+  - Các thông báo này có thanh tiến trình và sẽ tự động tắt sau một khoảng thời gian.
+
+- Input Fields:
+  - Các ô nhập liệu (input) có viền đơn giản, thay đổi màu sắc viền khi focus (chế độ sáng/tối).
+
+4. Hiệu ứng và Tương tác:
+
+- Chuyển động mượt mà: Mọi chuyển động (hover, click, modal mở) đều được thực hiện một cách mượt mà với các hiệu ứng ease-in-out và ease-out.
+- Cursor: Con trỏ chuột tùy chỉnh (circular dot) với các hiệu ứng mở rộng và thay đổi màu sắc khi hover vào các phần tử có thể tương tác (như button, card).
+- Modal Animation: Mở và đóng modal với hiệu ứng "scale" kết hợp với "fade" mượt mà.
+- Scroll Animation: Khi cuộn trang, các phần tử xuất hiện một cách mượt mà từ dưới lên, tạo cảm giác sinh động.
+- Theme Transition: Khi chuyển đổi giữa chế độ sáng và tối, màu sắc của các thành phần UI được thay đổi mượt mà mà không có sự gián đoạn.
