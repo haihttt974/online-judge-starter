@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
 import { Editor } from "@monaco-editor/react";
 import { authorData } from "./profileData.js";
+import { analyzeCodeForAI } from "./aiDetection.js";
 
 const CONTACT_ICONS = {
   Facebook: <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
-  Zalo: <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.5 13.5h-5l4.5-5.5V9h-6v1.5h4.5L9.5 16V17h7v-1.5z"/></svg>,
+  Zalo: <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-2 18h-10v-3l5-6h-5v-3h10v3l-5 6h5v3z"/></svg>,
   TikTok: <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.032 2.622.02 3.924-.044.032 1.536.694 2.94 1.71 4.029 1.138 1.1 2.603 1.815 4.14 2.133v3.91c-1.424-.136-2.784-.52-4.01-1.127-.14-.07-.282-.14-.422-.218v6.928c.036 3.108-1.57 6.13-4.306 7.632-2.784 1.528-6.19 1.41-8.835-.308-2.617-1.7-4.103-4.81-3.77-7.913.332-3.11 2.502-5.914 5.485-6.953.53-.186 1.082-.31 1.644-.372v4.06c-.463.14-.904.34-1.306.59-1.396.865-2.203 2.41-2.062 4.045.143 1.636 1.157 3.11 2.6 3.79 1.442.68 3.16.544 4.465-.353 1.258-.86 1.95-2.31 1.88-3.826V.02z"/></svg>,
   Discord: <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.074 0 00-.079-.037A19.736 19.736 0 004.683 4.37a.07.07 0 00-.032.027C.533 10.493-.586 16.458.293 22.29a.072.072 0 00.03.047 19.869 19.869 0 005.974 3.028.077.077 0 00.084-.028 14.223 14.223 0 001.225-1.997.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01 10.143 10.143 0 00.372.292.077.077 0 01-.006.128c-.591.347-1.218.645-1.873.892a.076.076 0 00-.041.107c.36.698.772 1.362 1.225 1.993.023.033.057.042.084.028a19.839 19.839 0 006.002-3.03.077.077 0 00.032-.047c1.033-6.67-.638-12.596-4.66-17.893a.073.073 0 00-.033-.027zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42.001 1.333-.946 2.418-2.157 2.418z"/></svg>,
   LinkedIn: <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>,
@@ -94,8 +95,19 @@ const TRANSLATIONS = {
     toastDeletedTCMsg: "Đã xóa Testcase",
     toastUpload: "Tải lên",
     toastReceived: "Đã nhận",
+    toastFileTooLarge: "File quá lớn",
+    toastFileTooLargeMsg: "Dung lượng testcase phải dưới 1.5MB.",
     toastDuplicate: "Trùng lặp",
     toastDuplicateMsg: "Testcase có nội dung tương tự đã tồn tại.",
+    aiSuspicion: "Phân tích nghi vấn AI",
+    aiScore: "Điểm nghi vấn AI",
+    aiConfidence: "Mức độ tin cậy",
+    aiIndicators: "Dấu hiệu nghi vấn",
+    aiAnalyzing: "Đang phân tích AI...",
+    aiAnalyzed: "Đã phân tích AI",
+    aiLevelHigh: "Khả năng cao do AI hỗ trợ",
+    aiLevelMed: "Phát hiện dấu hiệu AI nghi vấn",
+    aiLevelLow: "Đặc điểm code do người viết",
     testcase: "testcase",
     statusAll: "Tất cả trạng thái",
     statusP: "Chưa chạy (P)",
@@ -174,12 +186,24 @@ const TRANSLATIONS = {
     toastSavedTC: "Saved Testcase",
     toastDeleted: "Deleted",
     toastDeletedAllMsg: "All testcases have been removed.",
-    toastDeletedTCMsg: "Deleted Testcase",
+    toastDeletedTCMsg: "Deleted testcase",
     toastUpload: "Upload",
     toastReceived: "Received",
+    toastFileTooLarge: "File too large",
+    toastFileTooLargeMsg: "Testcase size must be under 1.5MB.",
     toastDuplicate: "Duplicate",
-    toastDuplicateMsg: "A testcase with similar content already exists.",
-    testcase: "testcases",
+    toastDuplicateMsg: "A similar testcase already exists.",
+    aiSuspicion: "AI Suspicion Analysis",
+    aiScore: "AI Suspicion Score",
+    aiConfidence: "Confidence Level",
+    aiIndicators: "Suspicious Indicators",
+    aiAnalyzing: "Analyzing AI...",
+    aiAnalyzed: "AI Analysis Complete",
+    aiLevelHigh: "Likely AI-assisted",
+    aiLevelMed: "Suspicious AI patterns detected",
+    aiLevelLow: "Human-centric patterns",
+    testcase: "testcase",
+
     statusAll: "All Statuses",
     statusP: "Pending (P)",
     statusRJ: "Judging (RJ)",
@@ -262,6 +286,15 @@ const TRANSLATIONS = {
     toastReceived: "受信済み",
     toastDuplicate: "重複",
     toastDuplicateMsg: "同様の内容のテストケースが既に存在します。",
+    aiSuspicion: "AI疑念分析",
+    aiScore: "AI疑念スコア",
+    aiConfidence: "信頼レベル",
+    aiIndicators: "不審な指標",
+    aiAnalyzing: "AI分析中...",
+    aiAnalyzed: "AI分析完了",
+    aiLevelHigh: "AIによって生成された可能性が高い",
+    aiLevelMed: "不審なAIパターンを検出",
+    aiLevelLow: "人間によるコードの特徴",
     testcase: "テストケース",
     statusAll: "すべてのステータス",
     statusP: "保留中 (P)",
@@ -340,10 +373,20 @@ const TRANSLATIONS = {
     toastDeletedAllMsg: "所有测试用例已移除。",
     toastDeletedTCMsg: "已删除测试用例",
     toastUpload: "上传",
-    toastReceived: "已接收",
+    toastReceived: "已收到",
     toastDuplicate: "重复",
-    toastDuplicateMsg: "已存在内容相似的测试用例。",
+    toastDuplicateMsg: "已存在相似内容的测试用例。",
+    aiSuspicion: "AI 疑似度分析",
+    aiScore: "AI 疑似得分",
+    aiConfidence: "置信水平",
+    aiIndicators: "可疑指标",
+    aiAnalyzing: "正在分析 AI...",
+    aiAnalyzed: "AI 分析完成",
+    aiLevelHigh: "极可能是 AI 生成",
+    aiLevelMed: "检测到可疑 AI 模式",
+    aiLevelLow: "呈现人类编写特征",
     testcase: "测试用例",
+
     statusAll: "所有状态",
     statusP: "等待 (P)",
     statusRJ: "评测中 (RJ)",
@@ -424,6 +467,15 @@ const TRANSLATIONS = {
     toastReceived: "수신됨",
     toastDuplicate: "중복",
     toastDuplicateMsg: "유사한 내용의 테스트케이스가 이미 존재합니다.",
+    aiSuspicion: "AI 의심 분석",
+    aiScore: "AI 의심 점수",
+    aiConfidence: "신뢰 수준",
+    aiIndicators: "의심 지표",
+    aiAnalyzing: "AI 분석 중...",
+    aiAnalyzed: "AI 분석 완료",
+    aiLevelHigh: "AI가 생성했을 가능성 높음",
+    aiLevelMed: "의심스러운 AI 패턴 감지",
+    aiLevelLow: "사람이 작성한 코드 특징",
     testcase: "테스트케이스",
     statusAll: "모든 상태",
     statusP: "대기 중 (P)",
@@ -569,7 +621,9 @@ export default function App() {
   const [files, setFiles] = useState([]);
   const [uploadedTestcases, setUploadedTestcases] = useState([]);
   const [result, setResult] = useState(null);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
   const [running, setRunning] = useState(false);
+
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [toasts, setToasts] = useState([]);
   const [testcaseModalOpen, setTestcaseModalOpen] = useState(false);
@@ -582,6 +636,7 @@ export default function App() {
   const [editingIndex, setEditingIndex] = useState(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedFailedTest, setSelectedFailedTest] = useState(null);
 
   const selectedLimits = LANGUAGE_LIMITS[language] || LANGUAGE_LIMITS.cpp;
   const t = TRANSLATIONS[appLang];
@@ -759,6 +814,12 @@ export default function App() {
       }
       const text = await file.text();
       setCode(text);
+      setAiAnalysis(null);
+      showToast("info", t.aiSuspicion, t.aiAnalyzing);
+      
+      const analysis = await analyzeCodeForAI(text, detectedLang);
+      setAiAnalysis(analysis);
+      showToast("success", t.toastSuccess, `${t.aiAnalyzed}: ${file.name}`);
       showToast("success", t.toastSuccess, `${t.toastFileSuccess}: ${file.name}`);
     }
     e.target.value = "";
@@ -821,7 +882,22 @@ export default function App() {
               </div>
             </div>
             <Editor height={isFullScreen ? "calc(100vh - 60px)" : "500px"} language={language} theme={theme === "dark" ? "vs-dark" : "light"} value={code} onMount={setEditorRef} onChange={(v) => setCode(v || "")}
-              options={{ fontSize: 14, fontFamily: "'JetBrains Mono', monospace", fontLigatures: false, letterSpacing: 0, minimap: { enabled: false }, automaticLayout: true, padding: { top: 16, bottom: 16 }, cursorBlinking: "smooth", formatOnPaste: true, tabSize: 4, lineNumbersMinChars: 3, scrollBeyondLastLine: false, wordWrap: "on" }}
+              options={{ 
+                fontSize: 14, 
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Courier New', monospace", 
+                fontLigatures: false, 
+                lineHeight: 22,
+                letterSpacing: 0, 
+                minimap: { enabled: false }, 
+                automaticLayout: true, 
+                padding: { top: 16, bottom: 16 }, 
+                cursorBlinking: "smooth", 
+                formatOnPaste: true, 
+                tabSize: 4, 
+                lineNumbersMinChars: 3, 
+                scrollBeyondLastLine: false, 
+                wordWrap: "on" 
+              }}
             />
           </div>
         </section>
@@ -831,7 +907,22 @@ export default function App() {
           <label className="upload-box">
             <input type="file" multiple onChange={async (e) => {
               const selected = Array.from(e.target.files);
-              const entries = await Promise.all(selected.map(async f => ({ name: f.name, content: await f.text(), file: f })));
+              
+              // Validate file size (1.5MB per file)
+              const MAX_SIZE = 1.5 * 1024 * 1024;
+              const validFiles = selected.filter(f => f.size <= MAX_SIZE);
+              const oversizedFiles = selected.filter(f => f.size > MAX_SIZE);
+              
+              if (oversizedFiles.length > 0) {
+                showToast("warning", t.toastFileTooLarge, `${t.toastFileTooLargeMsg}: ${oversizedFiles.map(f => f.name).join(", ")}`);
+              }
+
+              if (validFiles.length === 0) {
+                e.target.value = "";
+                return;
+              }
+
+              const entries = await Promise.all(validFiles.map(async f => ({ name: f.name, content: await f.text(), file: f })));
               
               const parsedBatch = (function parse(fileEntries) {
                 const map = new Map();
@@ -902,6 +993,39 @@ export default function App() {
           <div className="stat-item"><span>{t.peakMemory}</span><strong>{performanceStats.maxMemory ? performanceStats.maxMemory.toFixed(1) : 0}MB</strong></div>
         </div>
 
+        {aiAnalysis && (
+          <div style={{ marginBottom: '32px', padding: '24px', borderRadius: '16px', background: 'var(--glass-bg)', border: '1px solid var(--border-color)', boxShadow: '0 8px 32px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', gap: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                  {t.aiSuspicion}
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  {t.aiConfidence}: {aiAnalysis.confidence}%
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 900, color: aiAnalysis.score > 50 ? '#f87171' : 'var(--accent)', lineHeight: 1 }}>{aiAnalysis.score}%</div>
+                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px', fontWeight: 800 }}>{t.aiScore}</div>
+              </div>
+            </div>
+            
+            <div style={{ padding: '12px 16px', borderRadius: '12px', background: aiAnalysis.score > 50 ? 'rgba(239, 68, 68, 0.05)' : 'var(--accent-glow)', border: '1px solid', borderColor: aiAnalysis.score > 50 ? 'rgba(239, 68, 68, 0.2)' : 'var(--accent)', color: aiAnalysis.score > 50 ? '#f87171' : 'var(--accent)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '20px', display: 'inline-block' }}>
+              {aiAnalysis.score > 70 ? t.aiLevelHigh : aiAnalysis.score > 40 ? t.aiLevelMed : t.aiLevelLow}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+              {aiAnalysis.indicators.map((ind, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginTop: '2px', flexShrink: 0, color: aiAnalysis.score > 40 ? '#f87171' : 'var(--accent)' }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                  {ind}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="results-scroll-container">
           <table>
             <thead><tr><th>#</th><th>{t.input}</th><th>{t.output}</th><th>{t.expected}</th><th>{t.status}</th><th>{t.performance}</th><th>{t.actions}</th></tr></thead>
@@ -909,9 +1033,9 @@ export default function App() {
               {filteredResults.map(item => (
                 <tr key={item.index}>
                   <td>#{item.index}</td>
-                  <td><div className="table-preview-box">{item.status === 'AC' ? '-' : item.inputPreview}</div></td>
-                  <td><div className="table-preview-box">{(item.status === 'RJ' || running) ? '...' : (item.status === 'AC' ? '-' : item.stdoutPreview || '-')}</div></td>
-                  <td><div className="table-preview-box">{item.status === 'AC' ? '-' : item.expectedPreview}</div></td>
+                  <td style={{ textAlign: 'center' }}>{item.status === 'AC' ? '_' : <div className="table-preview-box">{item.inputPreview}</div>}</td>
+                  <td style={{ textAlign: 'center' }}>{(item.status === 'RJ' || running) ? <div className="table-preview-box">...</div> : (item.status === 'AC' ? '_' : <div className="table-preview-box">{item.stdoutPreview || '-'}</div>)}</td>
+                  <td style={{ textAlign: 'center' }}>{item.status === 'AC' ? '_' : <div className="table-preview-box">{item.expectedPreview}</div>}</td>
                   <td><span className={getStatusClass(item.status)}>{t[`status${item.status}`] || item.status}</span></td>
                   <td><div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{item.timeMs ? `${item.timeMs}ms` : '-'}<br/>{item.memoryMb ? `${item.memoryMb.toFixed(1)}MB` : '-'}</div></td>
                   <td>
@@ -930,19 +1054,26 @@ export default function App() {
         {displayedResult?.results?.some(r => r.status !== 'AC' && r.status !== 'P' && r.status !== 'RJ') && (
           <div style={{ marginTop: '32px' }}>
             <h3 style={{ marginBottom: '16px', color: '#f87171' }}>{t.failedTests}</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
               {displayedResult.results.filter(r => r.status !== 'AC' && r.status !== 'P' && r.status !== 'RJ').map(r => (
-                <div key={r.index} className="panel" style={{ background: 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <strong>Testcase #{r.index}</strong>
-                    <span className={getStatusClass(r.status)}>{t[`status${r.status}`] || r.status}</span>
-                  </div>
-                  <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
-                    <label>{t.input}<div className="info-display" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{r.inputPreview}</div></label>
-                    <label>{t.expected}<div className="info-display" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{r.expectedPreview}</div></label>
-                    <label>{t.output}<div className="info-display" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#f87171' }}>{r.stdoutPreview || '-'}</div></label>
-                    {r.message && <div style={{ fontSize: '0.85rem', color: '#f87171', marginTop: '8px' }}>{r.message}</div>}
-                  </div>
+                <div 
+                  key={r.index} 
+                  className="failed-test-card" 
+                  onClick={() => setSelectedFailedTest(r)}
+                  style={{ 
+                    cursor: 'pointer',
+                    padding: '12px 20px',
+                    borderRadius: '12px',
+                    background: 'rgba(239, 68, 68, 0.05)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <strong style={{ color: 'var(--text-primary)' }}>#{r.index}</strong>
+                  <span className={getStatusClass(r.status)}>{t[`status${r.status}`] || r.status}</span>
                 </div>
               ))}
             </div>
@@ -951,6 +1082,30 @@ export default function App() {
       </section>
 
       {/* Modals */}
+      {selectedFailedTest && (
+        <div className="modal-backdrop" onClick={() => setSelectedFailedTest(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2>Testcase #{selectedFailedTest.index}</h2>
+              <span className={getStatusClass(selectedFailedTest.status)}>{t[`status${selectedFailedTest.status}`] || selectedFailedTest.status}</span>
+            </div>
+            <div className="form-grid" style={{ gridTemplateColumns: '1fr', gap: '16px' }}>
+              <label>{t.input}<div className="info-display" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', height: 'auto', minHeight: '80px' }}>{selectedFailedTest.inputPreview}</div></label>
+              <label>{t.expected}<div className="info-display" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', height: 'auto', minHeight: '80px' }}>{selectedFailedTest.expectedPreview}</div></label>
+              <label>{t.output}<div className="info-display" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', height: 'auto', minHeight: '80px', color: '#f87171' }}>{selectedFailedTest.stdoutPreview || '-'}</div></label>
+              {selectedFailedTest.message && (
+                <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', fontSize: '0.9rem' }}>
+                  {selectedFailedTest.message}
+                </div>
+              )}
+            </div>
+            <div className="modal-btn-group">
+              <button className="modal-btn btn-primary" onClick={() => setSelectedFailedTest(null)}>{t.cancel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {contactModalOpen && (
         <div className="modal-backdrop" onClick={() => setContactModalOpen(false)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px' }}>
@@ -1005,16 +1160,13 @@ export default function App() {
         </button>
         {settingsOpen && (
           <div className="settings-menu">
-            <div className="settings-item-label" style={{ padding: '8px 12px' }}>
-              <strong>{t.settings}</strong>
+            <div className="settings-header">
+              <h3>{t.settings}</h3>
             </div>
-            <div className="settings-divider"></div>
             
-            <div className="settings-item-label" style={{ padding: '8px 12px' }}>
-              <small>{t.language}</small>
-              <div style={{ marginTop: '8px' }}>
-                <CustomSelect value={appLang} options={UI_LANGUAGES} onChange={setAppLang} placeholder={t.selectPlaceholder} />
-              </div>
+            <div className="settings-item-label" style={{ padding: '8px 16px' }}>
+              <small style={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--accent)', marginBottom: '8px', display: 'block' }}>{t.language}</small>
+              <CustomSelect value={appLang} options={UI_LANGUAGES} onChange={setAppLang} placeholder={t.selectPlaceholder} />
             </div>
 
             <div className="settings-divider"></div>
@@ -1022,8 +1174,8 @@ export default function App() {
             <div className="settings-item" onClick={toggleTheme}>
               <div className="settings-icon">
                 {theme === 'dark' ? 
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg> :
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg> :
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                 }
               </div>
               <div className="settings-item-label">
@@ -1034,13 +1186,13 @@ export default function App() {
 
             <div className="settings-divider"></div>
 
-            <div className="settings-item disabled" onClick={() => showToast("info", t.devNote, t.devNote)}>
-              <div className="settings-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg></div>
+            <div className="settings-item disabled">
+              <div className="settings-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg></div>
               <div className="settings-item-label"><span>{t.shortcuts}</span><small>{t.devNote}</small></div>
             </div>
 
-            <div className="settings-item disabled" onClick={() => showToast("info", t.devNote, t.devNote)}>
-              <div className="settings-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20v-6M6 20V10M18 20V4"></path></svg></div>
+            <div className="settings-item disabled">
+              <div className="settings-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20v-6M6 20V10M18 20V4"></path></svg></div>
               <div className="settings-item-label"><span>{t.analytics}</span><small>{t.devNote}</small></div>
             </div>
           </div>
