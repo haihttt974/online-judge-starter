@@ -33,12 +33,12 @@ const LANGUAGE_LIMITS = {
   python: { timeLimitMs: 3000, memoryLimitMb: 256 }
 };
 
-const UI_LANGUAGES = [
-  { value: "vi", label: "Tiếng Việt" },
-  { value: "en", label: "English" },
-  { value: "ja", label: "日本語" },
-  { value: "zh", label: "中文" },
-  { value: "ko", label: "한국어" }
+const SYSTEM_LANGUAGES = [
+  { code: 'vi', nativeName: 'Tiếng Việt', flag: '🇻🇳' },
+  { code: 'en', nativeName: 'English', flag: '🇺🇸' },
+  { code: 'ja', nativeName: '日本語', flag: '🇯🇵' },
+  { code: 'zh', nativeName: '中文', flag: '🇨🇳' },
+  { code: 'ko', nativeName: '한국어', flag: '🇰🇷' }
 ];
 
 const TRANSLATIONS = {
@@ -134,7 +134,12 @@ const TRANSLATIONS = {
     langCsharp: "C# .NET",
     langPascal: "Free Pascal",
     langNotSupported: "Ngôn ngữ không được hỗ trợ",
-    toastFileSuccess: "Đã nạp file code"
+    toastFileSuccess: "Đã nạp file code",
+    uiLang_vi: "Tiếng Việt",
+    uiLang_en: "Tiếng Anh",
+    uiLang_ja: "Tiếng Nhật",
+    uiLang_zh: "Tiếng Trung",
+    uiLang_ko: "Tiếng Hàn"
   },
   en: {
     title: "Online Judge Pro",
@@ -229,7 +234,12 @@ const TRANSLATIONS = {
     langCsharp: "C# .NET",
     langPascal: "Free Pascal",
     langNotSupported: "Language not supported",
-    toastFileSuccess: "Code file loaded"
+    toastFileSuccess: "Code file loaded",
+    uiLang_vi: "Vietnamese",
+    uiLang_en: "English",
+    uiLang_ja: "Japanese",
+    uiLang_zh: "Chinese",
+    uiLang_ko: "Korean"
   },
   ja: {
     title: "オンラインジャッジ Pro",
@@ -319,7 +329,12 @@ const TRANSLATIONS = {
     langPython: "Python 3",
     langJava: "Java JDK",
     langCsharp: "C# .NET",
-    langPascal: "Free Pascal"
+    langPascal: "Free Pascal",
+    uiLang_vi: "ベトナム語",
+    uiLang_en: "英語",
+    uiLang_ja: "日本語",
+    uiLang_zh: "中国語",
+    uiLang_ko: "韓国語"
   },
   zh: {
     title: "在线评测系统 Pro",
@@ -410,7 +425,12 @@ const TRANSLATIONS = {
     langPython: "Python 3",
     langJava: "Java JDK",
     langCsharp: "C# .NET",
-    langPascal: "Free Pascal"
+    langPascal: "Free Pascal",
+    uiLang_vi: "越南语",
+    uiLang_en: "英语",
+    uiLang_ja: "日语",
+    uiLang_zh: "中文",
+    uiLang_ko: "韩语"
   },
   ko: {
     title: "온라인 저지 Pro",
@@ -500,7 +520,12 @@ const TRANSLATIONS = {
     langPython: "Python 3",
     langJava: "Java JDK",
     langCsharp: "C# .NET",
-    langPascal: "Free Pascal"
+    langPascal: "Free Pascal",
+    uiLang_vi: "베트남어",
+    uiLang_en: "영어",
+    uiLang_ja: "일본어",
+    uiLang_zh: "중국어",
+    uiLang_ko: "한국어"
   }
 };
 
@@ -509,7 +534,7 @@ function getStatusClass(status) {
   return `status status-${value}`;
 }
 
-function CustomSelect({ value, options, onChange, placeholder = "Select..." }) {
+function CustomSelect({ value, options, onChange, placeholder = "Select...", lang }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = options.find(opt => opt.value === value);
 
@@ -521,14 +546,21 @@ function CustomSelect({ value, options, onChange, placeholder = "Select..." }) {
 
   return (
     <div className="select-container" onClick={e => e.stopPropagation()}>
-      <div className={`select-trigger ${isOpen ? 'open' : ''}`} onClick={() => setIsOpen(!isOpen)}>
+      <div className={`select-trigger ${isOpen ? 'open' : ''}`} onClick={() => setIsOpen(!isOpen)} role="combobox" aria-expanded={isOpen}>
         <span>{selectedOption?.label || placeholder}</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
       </div>
       {isOpen && (
-        <div className="select-options">
+        <div className="select-options" role="listbox">
           {options.map(opt => (
-            <div key={opt.value} className={`select-option ${opt.value === value ? 'active' : ''}`} onClick={() => { onChange(opt.value); setIsOpen(false); }}>
+            <div 
+              key={opt.value} 
+              className={`select-option ${opt.value === value ? 'active' : ''}`} 
+              onClick={() => { onChange(opt.value); setIsOpen(false); }}
+              role="option"
+              aria-selected={opt.value === value}
+              lang={opt.value}
+            >
               {opt.label}
             </div>
           ))}
@@ -640,6 +672,13 @@ export default function App() {
 
   const selectedLimits = LANGUAGE_LIMITS[language] || LANGUAGE_LIMITS.cpp;
   const t = TRANSLATIONS[appLang];
+
+  const uiLanguageOptions = useMemo(() => {
+    return SYSTEM_LANGUAGES.map(lang => ({
+      value: lang.code,
+      label: `${lang.flag} ${t[`uiLang_${lang.code}`] || lang.nativeName}`
+    })).sort((a, b) => a.label.localeCompare(b.label, appLang));
+  }, [appLang, t]);
 
   useEffect(() => {
     const close = () => setSettingsOpen(false);
@@ -1166,7 +1205,7 @@ export default function App() {
             
             <div className="settings-item-label" style={{ padding: '8px 16px' }}>
               <small style={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--accent)', marginBottom: '8px', display: 'block' }}>{t.language}</small>
-              <CustomSelect value={appLang} options={UI_LANGUAGES} onChange={setAppLang} placeholder={t.selectPlaceholder} />
+              <CustomSelect value={appLang} options={uiLanguageOptions} onChange={setAppLang} placeholder={t.selectPlaceholder} />
             </div>
 
             <div className="settings-divider"></div>
