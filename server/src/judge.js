@@ -9,7 +9,7 @@ const SUPPORTED_LANGUAGES = new Set(["c", "cpp", "python", "java", "csharp", "pa
 
 const LANGUAGE_LIMITS = {
   c: { timeLimitMs: 2000, memoryLimitMb: 256 },
-  cpp: { timeLimitMs: 1000, memoryLimitMb: 128 },
+  cpp: { timeLimitMs: 1000, memoryLimitMb: 256 },
   pascal: { timeLimitMs: 2000, memoryLimitMb: 256 },
   java: { timeLimitMs: 3000, memoryLimitMb: 4096 },
   csharp: { timeLimitMs: 3000, memoryLimitMb: 512 },
@@ -85,7 +85,7 @@ function getLanguageConfig(language) {
     },
     cpp: {
       fileName: "main.cpp",
-      compile: "g++ main.cpp -O2 -std=c++17 -lm -o main",
+      compile: "g++ main.cpp -O2 -std=c++17 -o main",
       run: "./main"
     },
     python: {
@@ -138,7 +138,7 @@ function runCommand(command, options = {}) {
     let killedByTimeout = false;
     let outputLimitExceeded = false;
 
-    const child = spawn("bash", ["-lc", command], {
+    const child = spawn("bash", ["-c", command], {
       cwd,
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "pipe"]
@@ -242,7 +242,7 @@ async function judgeSubmission({ language, code, files, maxOutputBytes }) {
     // Biên dịch trước. Nếu lỗi biên dịch thì không chạy testcase nữa.
     const compileResult = await runCommand(config.compile, {
       cwd: jobDir,
-      timeoutMs: Math.max(10000, effectiveTimeLimitMs),
+      timeoutMs: Math.max(30000, effectiveTimeLimitMs),
       maxOutputBytes
     });
 
