@@ -120,7 +120,9 @@ const TRANSLATIONS = {
     langPython: "Python 3",
     langJava: "Java JDK",
     langCsharp: "C# .NET",
-    langPascal: "Free Pascal"
+    langPascal: "Free Pascal",
+    langNotSupported: "Ngôn ngữ không được hỗ trợ",
+    toastFileSuccess: "Đã nạp file code"
   },
   en: {
     title: "Online Judge Pro",
@@ -201,7 +203,9 @@ const TRANSLATIONS = {
     langPython: "Python 3",
     langJava: "Java JDK",
     langCsharp: "C# .NET",
-    langPascal: "Free Pascal"
+    langPascal: "Free Pascal",
+    langNotSupported: "Language not supported",
+    toastFileSuccess: "Code file loaded"
   },
   ja: {
     title: "オンラインジャッジ Pro",
@@ -731,6 +735,35 @@ export default function App() {
     showToast("info", t.toastDeleted, `${t.toastDeletedTCMsg} #${targetDeleteIndex}.`);
   };
 
+  const handleCodeUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const extension = file.name.split('.').pop().toLowerCase();
+    const extMap = {
+      'cpp': 'cpp', 'cc': 'cpp', 'cxx': 'cpp', 'hpp': 'cpp',
+      'c': 'c', 'h': 'c',
+      'py': 'python',
+      'java': 'java',
+      'cs': 'csharp',
+      'pas': 'pascal', 'pp': 'pascal'
+    };
+
+    const detectedLang = extMap[extension];
+    
+    if (!detectedLang) {
+      showToast("error", t.toastError, t.langNotSupported);
+    } else {
+      if (detectedLang !== language) {
+        setLanguage(detectedLang);
+      }
+      const text = await file.text();
+      setCode(text);
+      showToast("success", t.toastSuccess, `${t.toastFileSuccess}: ${file.name}`);
+    }
+    e.target.value = "";
+  };
+
   return (
     <div className="page">
       <CustomCursor />
@@ -774,11 +807,18 @@ export default function App() {
           <div className={`code-editor-container ${isFullScreen ? 'fullscreen' : ''}`}>
             <div className="editor-toolbar">
               <span>{t.editorTitle} - {language}</span>
-              <button className="btn-icon" onClick={() => setIsFullScreen(!isFullScreen)} title={isFullScreen ? t.cancel : t.executeAll}>                {isFullScreen ? 
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg> :
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
-                }
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <label className="btn-icon" title={t.toastUpload} style={{ cursor: 'pointer' }}>
+                  <input type="file" style={{ display: 'none' }} onChange={handleCodeUpload} accept=".cpp,.cc,.cxx,.c,.py,.java,.cs,.pas,.pp" />
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                </label>
+                <button className="btn-icon" onClick={() => setIsFullScreen(!isFullScreen)} title={isFullScreen ? t.cancel : t.executeAll}>
+                  {isFullScreen ? 
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg> :
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
+                  }
+                </button>
+              </div>
             </div>
             <Editor height={isFullScreen ? "calc(100vh - 60px)" : "500px"} language={language} theme={theme === "dark" ? "vs-dark" : "light"} value={code} onMount={setEditorRef} onChange={(v) => setCode(v || "")}
               options={{ fontSize: 14, fontFamily: "'JetBrains Mono', monospace", fontLigatures: false, letterSpacing: 0, minimap: { enabled: false }, automaticLayout: true, padding: { top: 16, bottom: 16 }, cursorBlinking: "smooth", formatOnPaste: true, tabSize: 4, lineNumbersMinChars: 3, scrollBeyondLastLine: false, wordWrap: "on" }}
