@@ -8,10 +8,32 @@ function readBoolean(name, fallback = false) {
   return String(process.env[name]).toLowerCase() === "true";
 }
 
+function readJudge0Urls() {
+  const explicitList = String(process.env.JUDGE0_URLS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const fallbackList = [
+    process.env.JUDGE0_URL || "http://judge0-server:2358",
+    "http://localhost:2358",
+    "http://127.0.0.1:2358"
+  ];
+
+  return [...new Set((explicitList.length > 0 ? explicitList : fallbackList).map((value) => value.replace(/\/+$/, "")))];
+}
+
 const MAX_TESTCASE_FILE_BYTES = 2 * 1024 * 1024;
 
 const judgeConfig = {
-  judge0Url: String(process.env.JUDGE0_URL || "http://judge0-server:2358").replace(/\/+$/, ""),
+  judge0Urls: (() => {
+    const urls = readJudge0Urls();
+    return urls;
+  })(),
+  judge0Url: (() => {
+    const urls = readJudge0Urls();
+    return urls[0];
+  })(),
   cpuTimeLimit: readPositiveNumber("JUDGE0_CPU_TIME_LIMIT", 2),
   wallTimeLimit: readPositiveNumber("JUDGE0_WALL_TIME_LIMIT", 5),
   memoryLimitKb: readPositiveNumber("JUDGE0_MEMORY_LIMIT", 128000),

@@ -6,10 +6,12 @@ class Judge0Error extends Error {
     this.name = "Judge0Error";
     this.code = options.code || "JUDGE0_ERROR";
     this.statusCode = options.statusCode || 502;
+    this.retryable = Boolean(options.retryable);
   }
 }
 
 let languagesCache = null;
+let activeJudge0Url = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -35,54 +37,78 @@ function isRetryableStatus(status) {
 
 async function judge0Request(path, options = {}) {
   const maxAttempts = Math.max(1, judgeConfig.connectRetryCount + 1);
+  const candidateUrls = [
+    ...(activeJudge0Url ? [activeJudge0Url] : []),
+    ...judgeConfig.judge0Urls.filter((url) => url !== activeJudge0Url)
+  ];
+  let lastError = null;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), judgeConfig.requestTimeoutMs);
+  for (const baseUrl of candidateUrls) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), judgeConfig.requestTimeoutMs);
 
-    try {
-      const response = await fetch(`${judgeConfig.judge0Url}${path}`, {
-        ...options,
-        headers: {
-          "content-type": "application/json",
-          ...(options.headers || {})
-        },
-        signal: controller.signal
-      });
+      try {
+        const response = await fetch(`${baseUrl}${path}`, {
+          ...options,
+          headers: {
+            "content-type": "application/json",
+            ...(options.headers || {})
+          },
+          signal: controller.signal
+        });
 
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        if (attempt < maxAttempts && isRetryableStatus(response.status)) {
+        const body = await response.json().catch(() => null);
+        if (!response.ok) {
+          const error = new Judge0Error("Judge service returned an error.", {
+            code: "JUDGE0_API_ERROR",
+            statusCode: response.status === 429 ? 503 : 502,
+            retryable: isRetryableStatus(response.status)
+          });
+
+          if (isRetryableStatus(response.status)) {
+            lastError = error;
+            if (attempt < maxAttempts) {
+              await sleep(judgeConfig.connectRetryDelayMs * attempt);
+              continue;
+            }
+            break;
+          }
+
+          throw error;
+        }
+
+        activeJudge0Url = baseUrl;
+        return body;
+      } catch (error) {
+        if (error instanceof Judge0Error) {
+          lastError = error;
+          if (error.retryable && attempt < maxAttempts) {
+            await sleep(judgeConfig.connectRetryDelayMs * attempt);
+            continue;
+          }
+          break;
+        }
+
+        lastError = error;
+        if (attempt < maxAttempts && isRetryableFetchError(error)) {
           await sleep(judgeConfig.connectRetryDelayMs * attempt);
           continue;
         }
-
-        throw new Judge0Error("Judge service returned an error.", {
-          code: "JUDGE0_API_ERROR",
-          statusCode: response.status === 429 ? 503 : 502
-        });
+        break;
+      } finally {
+        clearTimeout(timer);
       }
-
-      return body;
-    } catch (error) {
-      if (error instanceof Judge0Error) throw error;
-
-      if (attempt < maxAttempts && isRetryableFetchError(error)) {
-        await sleep(judgeConfig.connectRetryDelayMs * attempt);
-        continue;
-      }
-
-      throw new Judge0Error(
-        error.name === "AbortError" ? "Judge service request timed out." : "Judge service unavailable.",
-        {
-          code: error.name === "AbortError" ? "JUDGE0_TIMEOUT" : "JUDGE0_UNAVAILABLE",
-          statusCode: 503
-        }
-      );
-    } finally {
-      clearTimeout(timer);
     }
   }
+
+  throw new Judge0Error(
+    lastError?.name === "AbortError" ? "Judge service request timed out." : "Judge service unavailable.",
+    {
+      code: lastError?.name === "AbortError" ? "JUDGE0_TIMEOUT" : "JUDGE0_UNAVAILABLE",
+      statusCode: 503
+    }
+  );
 }
 
 async function getJudge0Languages() {
