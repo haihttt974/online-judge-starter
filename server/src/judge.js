@@ -1,54 +1,51 @@
-const fs = require("fs/promises");
-const fssync = require("fs");
-const os = require("os");
 const path = require("path");
-const { spawn } = require("child_process");
-const crypto = require("crypto");
-
-const SUPPORTED_LANGUAGES = new Set(["c", "cpp", "python", "java", "csharp", "pascal"]);
+const judgeConfig = require("./config/judgeConfig");
+const { LANGUAGE_MAP, getJudge0LanguageId } = require("./config/judge0Languages");
+const { Judge0Error, getJudge0Languages, runCodeBatch, runCodeWithTestcase } = require("./services/judge0Client");
+const { compareOutput, normalizeTokens } = require("./services/outputCompare");
 
 const LANGUAGE_LIMITS = {
   c: { timeLimitMs: 2000, memoryLimitMb: 256 },
   cpp: { timeLimitMs: 1000, memoryLimitMb: 256 },
   pascal: { timeLimitMs: 2000, memoryLimitMb: 256 },
-  java: { timeLimitMs: 3000, memoryLimitMb: 4096 },
+  java: { timeLimitMs: 3000, memoryLimitMb: 512 },
   csharp: { timeLimitMs: 3000, memoryLimitMb: 512 },
   python: { timeLimitMs: 5000, memoryLimitMb: 512 }
 };
 
-function makeId() {
-  if (crypto.randomUUID) return crypto.randomUUID();
-  return crypto.randomBytes(16).toString("hex");
+class JudgeRequestError extends Error {
+  constructor(message, statusCode = 400, code = "INVALID_JUDGE_REQUEST") {
+    super(message);
+    this.name = "JudgeRequestError";
+    this.statusCode = statusCode;
+    this.code = code;
+  }
 }
 
-// Lấy danh sách testcase từ các file upload.
-// File hợp lệ: 1.IN, 1.OUT, 2.IN, 2.OUT...
+function byteLength(value) {
+  return Buffer.byteLength(String(value ?? ""), "utf8");
+}
+
 function parseTestcases(files) {
   const map = new Map();
 
-  for (const file of files) {
+  for (const file of files || []) {
     const originalName = path.basename(file.originalname || "");
     const match = originalName.match(/^(\d+)\.(in|out)$/i);
     if (!match) continue;
 
     const index = Number(match[1]);
-    const type = match[2].toLowerCase();
+    const testcase = map.get(index) || { index };
+    const content = file.buffer.toString("utf8");
 
-    if (!map.has(index)) {
-      map.set(index, { index });
-    }
-
-    const testcase = map.get(index);
-
-    if (type === "in") {
-      testcase.input = file.buffer.toString("utf8");
+    if (match[2].toLowerCase() === "in") {
+      testcase.input = content;
       testcase.inputName = originalName;
-    }
-
-    if (type === "out") {
-      testcase.expected = file.buffer.toString("utf8");
+    } else {
+      testcase.expected = content;
       testcase.outputName = originalName;
     }
+    map.set(index, testcase);
   }
 
   return [...map.values()]
@@ -56,330 +53,292 @@ function parseTestcases(files) {
     .sort((a, b) => a.index - b.index);
 }
 
-// Chuẩn hóa output để so sánh kiểu Online Judge thường dùng:
-// - Đổi CRLF của Windows thành LF
-// - Xóa khoảng trắng cuối từng dòng
-// - Xóa dòng trống cuối file
-function normalizeOutput(value) {
-  return String(value ?? "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+$/g, ""))
-    .join("\n")
-    .trim();
-}
-
-// Chuẩn hóa mạnh hơn để phát hiện PE:
-// Nếu chỉ sai khoảng trắng/xuống dòng thì xem là PE.
-function normalizeTokens(value) {
-  return String(value ?? "").trim().split(/\s+/).filter(Boolean).join(" ");
-}
-
-function getLanguageConfig(language) {
-  const configs = {
-    c: {
-      fileName: "main.c",
-      compile: "gcc main.c -O2 -std=c11 -lm -o main",
-      run: "./main"
-    },
-    cpp: {
-      fileName: "main.cpp",
-      compile: "g++ main.cpp -O2 -std=c++17 -o main",
-      run: "./main"
-    },
-    python: {
-      fileName: "main.py",
-      // Python không cần biên dịch, nhưng vẫn kiểm tra lỗi cú pháp trước.
-      compile: "python3 -m py_compile main.py",
-      run: "python3 main.py"
-    },
-    java: {
-      // Với Java, code nên có class Main.
-      fileName: "Main.java",
-      compile: "javac Main.java",
-      run: "java -Xms128m -Xmx512m -Xss1m -XX:CompressedClassSpaceSize=128m -XX:MaxMetaspaceSize=128m Main"
-    },
-    csharp: {
-      // Với C#, dùng Mono để biên dịch/chạy.
-      fileName: "Program.cs",
-      compile: "mcs Program.cs",
-      run: "mono Program.exe"
-    },
-    pascal: {
-      fileName: "main.pas",
-      compile: "fpc main.pas >/tmp/fpc_compile.log 2>&1",
-      run: "./main"
-    }
-  };
-
-  return configs[language];
+function normalizeProvidedTestcases(testcases) {
+  if (!Array.isArray(testcases)) return null;
+  return testcases.map((testcase, offset) => ({
+    index: Number(testcase.index) || offset + 1,
+    input: testcase.input ?? "",
+    expected: testcase.expectedOutput ?? testcase.output ?? testcase.expected ?? "",
+    inputName: testcase.inputFile,
+    outputName: testcase.outputFile
+  }));
 }
 
 function getLanguageLimits(language) {
-  return LANGUAGE_LIMITS[language] || { timeLimitMs: 2000, memoryLimitMb: 256 };
+  const defaults = LANGUAGE_LIMITS[language] || {};
+  return {
+    timeLimitMs: process.env.JUDGE0_CPU_TIME_LIMIT
+      ? judgeConfig.cpuTimeLimit * 1000
+      : defaults.timeLimitMs || judgeConfig.cpuTimeLimit * 1000,
+    memoryLimitMb: process.env.JUDGE0_MEMORY_LIMIT
+      ? judgeConfig.memoryLimitKb / 1024
+      : defaults.memoryLimitMb || judgeConfig.memoryLimitKb / 1024
+  };
 }
 
-// Chạy lệnh shell có timeout.
-// inputText sẽ được truyền vào stdin của chương trình.
-function runCommand(command, options = {}) {
-  const {
-    cwd,
-    inputText = "",
-    timeoutMs = 2000,
-    maxOutputBytes = 1024 * 1024,
-    env = {}
-  } = options;
-
-  return new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
-    let finished = false;
-    let killedByTimeout = false;
-    let outputLimitExceeded = false;
-
-    const child = spawn("bash", ["-c", command], {
-      cwd,
-      env: { ...process.env, ...env },
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-
-    const timer = setTimeout(() => {
-      killedByTimeout = true;
-      try {
-        child.kill("SIGKILL");
-      } catch (_) {}
-    }, timeoutMs);
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString("utf8");
-      if (Buffer.byteLength(stdout, "utf8") > maxOutputBytes) {
-        outputLimitExceeded = true;
-        try {
-          child.kill("SIGKILL");
-        } catch (_) {}
-      }
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString("utf8");
-      if (Buffer.byteLength(stderr, "utf8") > maxOutputBytes) {
-        outputLimitExceeded = true;
-        try {
-          child.kill("SIGKILL");
-        } catch (_) {}
-      }
-    });
-
-    child.on("error", (error) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timer);
-      resolve({
-        code: -1,
-        signal: null,
-        stdout,
-        stderr: String(error.message || error),
-        timedOut: killedByTimeout,
-        outputLimitExceeded
-      });
-    });
-
-    child.on("close", (code, signal) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timer);
-      resolve({
-        code,
-        signal,
-        stdout,
-        stderr,
-        timedOut: killedByTimeout,
-        outputLimitExceeded
-      });
-    });
-
-    child.stdin.write(inputText);
-    child.stdin.end();
-  });
-}
-
-async function judgeSubmission({ language, code, files, maxOutputBytes }) {
-  if (!SUPPORTED_LANGUAGES.has(language)) {
-    return {
-      status: "SE",
-      message: `Ngôn ngữ ${language} chưa được hỗ trợ.`
-    };
+function validateJudgeRequest({ language, code, testcases }) {
+  if (!getJudge0LanguageId(language)) {
+    throw new JudgeRequestError(`Unsupported language: ${language || "(empty)"}.`);
+  }
+  if (!String(code || "").trim()) {
+    throw new JudgeRequestError("Source code must not be empty.");
+  }
+  if (byteLength(code) > judgeConfig.maxSourceCodeBytes) {
+    throw new JudgeRequestError("Source code is too large.", 413, "SOURCE_CODE_TOO_LARGE");
+  }
+  if (!Array.isArray(testcases) || testcases.length === 0) {
+    throw new JudgeRequestError("No valid testcase pairs found.");
+  }
+  if (testcases.length > judgeConfig.maxTestcases) {
+    throw new JudgeRequestError("Too many testcases.", 413, "TOO_MANY_TESTCASES");
   }
 
-  const testcases = parseTestcases(files);
+  for (const testcase of testcases) {
+    if (typeof testcase.input !== "string" || typeof testcase.expected !== "string") {
+      throw new JudgeRequestError(`Invalid testcase #${testcase.index}.`);
+    }
+    if (byteLength(testcase.input) > judgeConfig.maxStdinBytes) {
+      throw new JudgeRequestError(`Input for testcase #${testcase.index} is too large.`, 413);
+    }
+    if (byteLength(testcase.expected) > judgeConfig.maxExpectedOutputBytes) {
+      throw new JudgeRequestError(`Expected output for testcase #${testcase.index} is too large.`, 413);
+    }
+  }
+}
+
+function legacyStatusFromJudge0(raw, actualOutput, expectedOutput) {
+  const id = Number(raw?.status?.id);
+  const description = String(raw?.status?.description || "");
+
+  if (id === 6 || /compilation error/i.test(description)) return "CE";
+  if (id === 5 || /time limit/i.test(description)) return "TLE";
+  if (/output limit/i.test(description)) return "OLE";
+  if (/memory limit/i.test(description)) return "MLE";
+  if (id >= 7 && id <= 12) return "ER";
+  if (id === 13 || id === 14 || id === 1 || id === 2) return "SE";
+
+  if (compareOutput(actualOutput, expectedOutput)) return "AC";
+  if (normalizeTokens(actualOutput) === normalizeTokens(expectedOutput)) return "PE";
+  return "WA";
+}
+
+function normalizedStatus(legacyStatus) {
+  return {
+    AC: "accepted",
+    WA: "wrong_answer",
+    PE: "wrong_answer",
+    TLE: "time_limit_exceeded",
+    MLE: "memory_limit_exceeded",
+    OLE: "output_limit_exceeded",
+    CE: "compilation_error",
+    ER: "runtime_error",
+    SE: "internal_error"
+  }[legacyStatus] || "internal_error";
+}
+
+function resultMessage(status) {
+  return {
+    AC: "Correct.",
+    WA: "Wrong answer.",
+    PE: "Output differs only in whitespace.",
+    TLE: "Time limit exceeded.",
+    MLE: "Memory limit exceeded.",
+    OLE: "Output limit exceeded.",
+    CE: "Compilation error.",
+    ER: "Runtime error.",
+    SE: "Judge service error."
+  }[status];
+}
+
+function normalizeJudge0Result(raw, testcase, maxOutputBytes) {
+  const fullActualOutput = String(raw?.stdout ?? "");
+  const expectedOutput = testcase.expected;
+  const status = legacyStatusFromJudge0(raw, fullActualOutput, expectedOutput);
+  const responseLimit = Math.min(maxOutputBytes, judgeConfig.maxResponseFieldBytes);
+  const previewLimit = Math.min(responseLimit, 2000);
+  const actualOutput = fullActualOutput.slice(0, responseLimit);
+  const stderr = String(raw?.stderr ?? "").slice(0, responseLimit);
+  const compileOutput = String(raw?.compile_output ?? "").slice(0, responseLimit);
+  const timeSeconds = Number.parseFloat(raw?.time);
+  const memoryKb = Number.parseFloat(raw?.memory);
+
+  return {
+    index: testcase.index,
+    status,
+    normalizedStatus: normalizedStatus(status),
+    passed: status === "AC",
+    inputFile: testcase.inputName,
+    outputFile: testcase.outputName,
+    input: testcase.input.slice(0, responseLimit),
+    expectedOutput: expectedOutput.slice(0, responseLimit),
+    actualOutput,
+    stdout: actualOutput,
+    stderr,
+    compileOutput,
+    time: Number.isFinite(timeSeconds) ? timeSeconds : null,
+    timeMs: Number.isFinite(timeSeconds) ? Math.round(timeSeconds * 1000) : 0,
+    memory: Number.isFinite(memoryKb) ? memoryKb : null,
+    memoryMb: Number.isFinite(memoryKb) ? memoryKb / 1024 : 0,
+    judge0Status: raw?.status || null,
+    message: resultMessage(status),
+    inputPreview: testcase.input.slice(0, previewLimit),
+    stdoutPreview: actualOutput.slice(0, previewLimit),
+    expectedPreview: expectedOutput.slice(0, previewLimit),
+    stderrPreview: (compileOutput || stderr).slice(0, previewLimit)
+  };
+}
+
+function finalLegacyStatus(results) {
+  if (results.every((result) => result.status === "AC")) return "AC";
+  return ["CE", "SE", "TLE", "MLE", "OLE", "ER", "WA", "PE"]
+    .find((status) => results.some((result) => result.status === status)) || "WA";
+}
+
+async function ensureLanguageIsAvailable(language, languageId) {
+  const languages = await getJudge0Languages();
+  if (!Array.isArray(languages) || !languages.some((item) => Number(item.id) === languageId)) {
+    throw new JudgeRequestError(
+      `Language ${language} is not available in the configured Judge0 instance.`,
+      400,
+      "UNSUPPORTED_JUDGE0_LANGUAGE"
+    );
+  }
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index]);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
+}
+
+function chunk(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function judgeSubmission({ language, code, sourceCode, files, testcases, maxOutputBytes }) {
+  const effectiveCode = sourceCode ?? code;
+  const effectiveTestcases = normalizeProvidedTestcases(testcases) || parseTestcases(files);
+  validateJudgeRequest({ language, code: effectiveCode, testcases: effectiveTestcases });
+
+  const languageId = getJudge0LanguageId(language);
   const limits = getLanguageLimits(language);
-  const effectiveTimeLimitMs = limits.timeLimitMs;
-  const effectiveMemoryLimitMb = limits.memoryLimitMb;
+  const effectiveMaxOutputBytes = Math.min(
+    Number(maxOutputBytes) || judgeConfig.maxOutputBytes,
+    judgeConfig.maxOutputBytes
+  );
 
-  if (!testcases.length) {
-    return {
-      status: "NTD",
-      message: "Không tìm thấy cặp testcase hợp lệ. Hãy upload dạng 1.IN + 1.OUT, 2.IN + 2.OUT...",
-      totalTests: 0,
-      passedTests: 0,
-      score: 0,
-      results: []
-    };
-  }
+  await ensureLanguageIsAvailable(language, languageId);
 
-  const jobId = makeId();
-  const jobDir = path.join(os.tmpdir(), `judge-${jobId}`);
-
-  await fs.mkdir(jobDir, { recursive: true });
-
-  try {
-    const config = getLanguageConfig(language);
-    const sourcePath = path.join(jobDir, config.fileName);
-
-    await fs.writeFile(sourcePath, code, "utf8");
-
-    // Biên dịch trước. Nếu lỗi biên dịch thì không chạy testcase nữa.
-    const compileResult = await runCommand(config.compile, {
-      cwd: jobDir,
-      timeoutMs: Math.max(30000, effectiveTimeLimitMs),
-      maxOutputBytes
+  async function runTestcase(testcase) {
+    const raw = await runCodeWithTestcase({
+      sourceCode: effectiveCode,
+      languageId,
+      stdin: testcase.input,
+      expectedOutput: testcase.expected,
+      timeLimit: limits.timeLimitMs / 1000,
+      wallTimeLimit: Math.max(judgeConfig.wallTimeLimit, limits.timeLimitMs / 1000 + 1),
+      memoryLimit: limits.memoryLimitMb * 1024
     });
-
-    if (compileResult.timedOut) {
-      return {
-        status: "CE",
-        message: "Biên dịch quá lâu hoặc bị treo.",
-        compileOutput: compileResult.stderr || compileResult.stdout,
-        totalTests: testcases.length,
-        passedTests: 0,
-        score: 0,
-        results: testcases.map((tc) => ({
-          index: tc.index,
-          status: "CE",
-          inputFile: tc.inputName,
-          outputFile: tc.outputName,
-          inputPreview: String(tc.input || "").slice(0, 1000),
-          stdoutPreview: "",
-          expectedPreview: String(tc.expected || "").slice(0, 1000),
-          stderrPreview: compileResult.stderr || compileResult.stdout,
-          message: "Không chạy vì lỗi biên dịch."
-        }))
-      };
-    }
-
-    if (compileResult.code !== 0) {
-      return {
-        status: "CE",
-        message: "Lỗi biên dịch.",
-        compileOutput: compileResult.stderr || compileResult.stdout,
-        totalTests: testcases.length,
-        passedTests: 0,
-        score: 0,
-        results: testcases.map((tc) => ({
-          index: tc.index,
-          status: "CE",
-          inputFile: tc.inputName,
-          outputFile: tc.outputName,
-          inputPreview: String(tc.input || "").slice(0, 1000),
-          stdoutPreview: "",
-          expectedPreview: String(tc.expected || "").slice(0, 1000),
-          stderrPreview: compileResult.stderr || compileResult.stdout,
-          message: "Không chạy vì lỗi biên dịch."
-        }))
-      };
-    }
-
-    const results = [];
-    let passedTests = 0;
-
-    for (const testcase of testcases) {
-      const startedAt = Date.now();
-
-      // ulimit giới hạn bộ nhớ tương đối.
-      // Đây là bản starter nội bộ, chưa phải sandbox hoàn chỉnh cho Internet công khai.
-      const memoryKb = Math.max(16, effectiveMemoryLimitMb) * 1024;
-      const command = `ulimit -v ${memoryKb}; ${config.run}`;
-
-      const runResult = await runCommand(command, {
-        cwd: jobDir,
-        inputText: testcase.input,
-        timeoutMs: effectiveTimeLimitMs,
-        maxOutputBytes
-      });
-
-      const timeMs = Date.now() - startedAt;
-
-      let status = "AC";
-      let message = "Chính xác.";
-
-      if (runResult.outputLimitExceeded) {
-        status = "OLE";
-        message = "Chương trình in ra quá nhiều dữ liệu.";
-      } else if (runResult.timedOut) {
-        status = "TLE";
-        message = "Chương trình chạy quá thời gian cho phép.";
-      } else if (runResult.code === 137 || runResult.signal === "SIGKILL") {
-        status = "MLE";
-        message = "Chương trình có thể đã vượt quá giới hạn bộ nhớ.";
-      } else if (runResult.code !== 0) {
-        status = "ER";
-        message = "Lỗi khi chạy chương trình.";
-      } else {
-        const actual = normalizeOutput(runResult.stdout);
-        const expected = normalizeOutput(testcase.expected);
-
-        if (actual === expected) {
-          status = "AC";
-          message = "Chính xác.";
-          passedTests += 1;
-        } else if (normalizeTokens(runResult.stdout) === normalizeTokens(testcase.expected)) {
-          status = "PE";
-          message = "Sai định dạng đầu ra: kết quả gần đúng nhưng khác khoảng trắng/xuống dòng.";
-        } else {
-          status = "WA";
-          message = "Kết quả sai.";
-        }
-      }
-
-      results.push({
-        index: testcase.index,
-        status,
-        inputFile: testcase.inputName,
-        outputFile: testcase.outputName,
-        timeMs,
-        message,
-        inputPreview: String(testcase.input || "").slice(0, 1000),
-        stdoutPreview: String(runResult.stdout || "").slice(0, 1000),
-        stderrPreview: String(runResult.stderr || "").slice(0, 1000),
-        expectedPreview: String(testcase.expected || "").slice(0, 1000)
-      });
-    }
-
-    const score = testcases.length ? Number(((passedTests / testcases.length) * 100).toFixed(2)) : 0;
-    const finalStatus = passedTests === testcases.length ? "AC" : "WA";
-
-    return {
-      status: finalStatus,
-      message: finalStatus === "AC" ? "Tất cả testcase đều chính xác." : "Có testcase chưa chính xác.",
-      totalTests: testcases.length,
-      passedTests,
-      score,
-      timeLimitMs: effectiveTimeLimitMs,
-      memoryLimitMb: effectiveMemoryLimitMb,
-      results
-    };
-  } finally {
-    // Xóa thư mục tạm sau khi chấm xong để không đầy ổ cứng.
-    try {
-      if (fssync.existsSync(jobDir)) {
-        await fs.rm(jobDir, { recursive: true, force: true });
-      }
-    } catch (_) {}
+    return normalizeJudge0Result(raw, testcase, effectiveMaxOutputBytes);
   }
+
+  // Run the first testcase alone so compilation errors stop immediately.
+  const firstResult = await runTestcase(effectiveTestcases[0]);
+  const results = [firstResult];
+
+  if (firstResult.status !== "CE" && effectiveTestcases.length > 1) {
+    const remainingTestcases = effectiveTestcases.slice(1);
+    let remainingResults;
+
+    if (judgeConfig.useBatch) {
+      const batches = chunk(remainingTestcases, judgeConfig.batchSize);
+      const batchResults = await Promise.all(batches.map(async (testcaseBatch) => {
+        const rawResults = await runCodeBatch(testcaseBatch.map((testcase) => ({
+          sourceCode: effectiveCode,
+          languageId,
+          stdin: testcase.input,
+          expectedOutput: testcase.expected,
+          timeLimit: limits.timeLimitMs / 1000,
+          wallTimeLimit: Math.max(judgeConfig.wallTimeLimit, limits.timeLimitMs / 1000 + 1),
+          memoryLimit: limits.memoryLimitMb * 1024
+        })));
+        return rawResults.map((raw, index) =>
+          normalizeJudge0Result(raw, testcaseBatch[index], effectiveMaxOutputBytes)
+        );
+      }));
+      remainingResults = batchResults.flat();
+    } else {
+      remainingResults = await mapWithConcurrency(
+        remainingTestcases,
+        judgeConfig.testcaseConcurrency,
+        runTestcase
+      );
+    }
+
+    // The same source already compiled successfully for the first testcase.
+    // A later CE is therefore a transient Judge0/isolate failure, not a user-code CE.
+    for (let index = 0; index < remainingResults.length; index += 1) {
+      if (remainingResults[index].status !== "CE") continue;
+
+      let recovered = remainingResults[index];
+      for (let attempt = 0; attempt < judgeConfig.compilationRetryCount && recovered.status === "CE"; attempt += 1) {
+        recovered = await runTestcase(remainingTestcases[index]);
+      }
+
+      if (recovered.status === "CE") {
+        recovered = {
+          ...recovered,
+          status: "SE",
+          normalizedStatus: "internal_error",
+          message: "Judge service failed to compile code that previously compiled successfully."
+        };
+      }
+      remainingResults[index] = recovered;
+    }
+    results.push(...remainingResults);
+  }
+
+  const passedTests = results.filter((result) => result.passed).length;
+  const status = finalLegacyStatus(results);
+
+  return {
+    status,
+    normalizedStatus: normalizedStatus(status),
+    message: status === "AC" ? "All testcases passed." : resultMessage(status),
+    totalTests: effectiveTestcases.length,
+    executedTests: results.length,
+    passedTests,
+    score: Number(((passedTests / effectiveTestcases.length) * 100).toFixed(2)),
+    timeLimitMs: limits.timeLimitMs,
+    memoryLimitMb: limits.memoryLimitMb,
+    compileOutput: results.find((result) => result.status === "CE")?.compileOutput || "",
+    results
+  };
 }
 
 module.exports = {
+  Judge0Error,
+  JudgeRequestError,
   judgeSubmission,
-  getLanguageLimits
+  getLanguageLimits,
+  mapWithConcurrency,
+  normalizeProvidedTestcases,
+  parseTestcases,
+  validateJudgeRequest,
+  LANGUAGE_MAP
 };

@@ -1,7 +1,8 @@
-import { useMemo, useState, useEffect } from "react";
-import { Editor } from "@monaco-editor/react";
+import { lazy, Suspense, useMemo, useState, useEffect } from "react";
 import { authorData } from "./profileData.js";
 import { analyzeCodeForAI } from "./aiDetection.js";
+
+const Editor = lazy(() => import("@monaco-editor/react"));
 
 const CONTACT_ICONS = {
   Facebook: <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
@@ -33,6 +34,27 @@ const LANGUAGE_LIMITS = {
   python: { timeLimitMs: 3000, memoryLimitMb: 256 }
 };
 
+const TESTCASE_PREVIEW_LENGTH = 2000;
+const MAX_TESTCASES = 50;
+const MAX_VISIBLE_TOASTS = 3;
+
+function previewText(value) {
+  const text = String(value ?? "");
+  return text.length > TESTCASE_PREVIEW_LENGTH
+    ? `${text.slice(0, TESTCASE_PREVIEW_LENGTH)}\n...`
+    : text;
+}
+
+function contentSignature(input, expected) {
+  const value = `${input}\u0000${expected}`;
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${value.length}:${hash >>> 0}`;
+}
+
 const SYSTEM_LANGUAGES = [
   { code: 'vi', nativeName: 'Tiếng Việt', flag: '🇻🇳' },
   { code: 'en', nativeName: 'English', flag: '🇺🇸' },
@@ -53,6 +75,8 @@ const TRANSLATIONS = {
     memoryLimit: "Bộ nhớ tối đa",
     configuration: "2. Cấu hình",
     dropTestcases: "Thả Testcase (.IN/.OUT)",
+    selectTestcaseFolder: "Chọn folder testcase",
+    toastFolderScanned: "Đã quét folder",
     manualTestcase: "+ Thêm thủ công",
     executeAll: "Chấm tất cả",
     judging: "Đang chấm...",
@@ -96,7 +120,7 @@ const TRANSLATIONS = {
     toastUpload: "Tải lên",
     toastReceived: "Đã nhận",
     toastFileTooLarge: "File quá lớn",
-    toastFileTooLargeMsg: "Dung lượng testcase phải dưới 1.5MB.",
+    toastFileTooLargeMsg: "Dung lượng mỗi file testcase phải nhỏ hơn hoặc bằng 2MB.",
     toastDuplicate: "Trùng lặp",
     toastDuplicateMsg: "Testcase có nội dung tương tự đã tồn tại.",
     aiSuspicion: "Phân tích nghi vấn AI",
@@ -152,6 +176,8 @@ const TRANSLATIONS = {
     memoryLimit: "Memory Limit",
     configuration: "2. Configuration",
     dropTestcases: "Drop Testcases (.IN/.OUT)",
+    selectTestcaseFolder: "Select testcase folder",
+    toastFolderScanned: "Folder scanned",
     manualTestcase: "+ Manual Testcase",
     executeAll: "Execute All",
     judging: "Judging...",
@@ -195,7 +221,7 @@ const TRANSLATIONS = {
     toastUpload: "Upload",
     toastReceived: "Received",
     toastFileTooLarge: "File too large",
-    toastFileTooLargeMsg: "Testcase size must be under 1.5MB.",
+    toastFileTooLargeMsg: "Each testcase file must be 2MB or smaller.",
     toastDuplicate: "Duplicate",
     toastDuplicateMsg: "A similar testcase already exists.",
     aiSuspicion: "AI Suspicion Analysis",
@@ -570,80 +596,6 @@ function CustomSelect({ value, options, onChange, placeholder = "Select...", lan
   );
 }
 
-function CustomCursor() {
-  const [hoverState, setHoverState] = useState("default");
-  useEffect(() => {
-    const nucleus = document.getElementById("cursor-nucleus");
-    const aura = document.getElementById("cursor-aura");
-    if (!nucleus || !aura) return;
-    const handleMouseMove = (e) => {
-      const x = e.clientX, y = e.clientY;
-      nucleus.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-      aura.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-      const target = e.target;
-      if (!target) return;
-      const isPointer = target.closest("button, a, .theme-toggle, .upload-box, .btn-icon, .author-btn, .btn-action-pro, .social-card, .select-trigger, .select-option");
-      const isText = target.closest("input, textarea, .monaco-editor, .case-textarea");
-      if (isPointer) setHoverState("pointer");
-      else if (isText) setHoverState("text");
-      else setHoverState("default");
-    };
-    window.addEventListener("mousemove", handleMouseMove, { passive: true });
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-  return (
-    <>
-      <div id="cursor-aura" className={`cursor-aura hover-${hoverState}`} />
-      <div id="cursor-nucleus" className={`cursor-nucleus hover-${hoverState}`} />
-    </>
-  );
-}
-
-function NeuralBackground() {
-  useEffect(() => {
-    const canvas = document.getElementById("neural-canvas");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    let points = [];
-    let mouse = { x: null, y: null };
-    const init = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      points = [];
-      for (let i = 0; i < 80; i++) {
-        points.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5 });
-      }
-    };
-    const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const theme = document.body.getAttribute("data-theme");
-      ctx.strokeStyle = theme === "dark" ? "rgba(94, 234, 212, 0.25)" : "rgba(14, 165, 233, 0.25)";
-      ctx.fillStyle = theme === "dark" ? "rgba(94, 234, 212, 0.5)" : "rgba(14, 165, 233, 0.5)";
-      points.forEach((p, i) => {
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill();
-        for (let j = i + 1; j < points.length; j++) {
-          const p2 = points[j];
-          const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
-          if (dist < 150) { ctx.lineWidth = 1 - dist / 150; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
-        }
-        if (mouse.x) {
-          const mDist = Math.hypot(p.x - mouse.x, p.y - mouse.y);
-          if (mDist < 200) { ctx.lineWidth = (1 - mDist / 200) * 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); }
-        }
-      });
-      requestAnimationFrame(animate);
-    };
-    const handleMouseMove = (e) => { mouse.x = e.clientX; mouse.y = e.clientY; };
-    window.addEventListener("resize", init); window.addEventListener("mousemove", handleMouseMove);
-    init(); animate();
-    return () => { window.removeEventListener("resize", init); window.removeEventListener("mousemove", handleMouseMove); };
-  }, []);
-  return <canvas id="neural-canvas" />;
-}
-
 export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const [appLang, setAppLang] = useState(() => localStorage.getItem("appLang") || "vi");
@@ -652,6 +604,7 @@ export default function App() {
   const [editorRef, setEditorRef] = useState(null);
   const [files, setFiles] = useState([]);
   const [uploadedTestcases, setUploadedTestcases] = useState([]);
+  const [folderScanSummary, setFolderScanSummary] = useState(null);
   const [result, setResult] = useState(null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [running, setRunning] = useState(false);
@@ -757,7 +710,7 @@ export default function App() {
 
   const showToast = (type, title, message) => {
     const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { id, type, title, message }]);
+    setToasts(prev => [...prev.slice(-(MAX_VISIBLE_TOASTS - 1)), { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
   };
 
@@ -766,6 +719,113 @@ export default function App() {
   };
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+  const MAX_TESTCASE_FILE_SIZE = 2 * 1024 * 1024;
+
+  const handleTestcaseSelection = async (selectedFiles, sourceType = "files") => {
+    const selected = Array.from(selectedFiles || []);
+    if (!selected.length) return;
+
+    const validFiles = selected.filter(file => file.size <= MAX_TESTCASE_FILE_SIZE);
+    const oversizedFiles = selected.filter(file => file.size > MAX_TESTCASE_FILE_SIZE);
+
+    if (oversizedFiles.length > 0) {
+      const names = oversizedFiles.slice(0, 5).map(file => file.name).join(", ");
+      showToast("warning", t.toastFileTooLarge, `${t.toastFileTooLargeMsg}: ${names}${oversizedFiles.length > 5 ? "..." : ""}`);
+    }
+
+    const pairedByLocation = new Map();
+    validFiles.forEach(file => {
+      const relativePath = String(file.webkitRelativePath || file.name).replace(/\\/g, "/");
+      const pathParts = relativePath.split("/");
+      const fileName = pathParts.pop();
+      const match = fileName.match(/^(\d+)\.(in|out)$/i);
+      if (!match) return;
+
+      const originalIndex = Number(match[1]);
+      const type = match[2].toLowerCase();
+      const parentPath = pathParts.join("/");
+      const pairKey = `${parentPath}::${originalIndex}`;
+      const pair = pairedByLocation.get(pairKey) || { originalIndex, parentPath };
+      pair[type] = file;
+      pairedByLocation.set(pairKey, pair);
+    });
+
+    const completePairs = [...pairedByLocation.values()]
+      .filter(pair => pair.in && pair.out)
+      .sort((a, b) => a.parentPath.localeCompare(b.parentPath) || a.originalIndex - b.originalIndex);
+    const pairsToAdd = completePairs.slice(0, Math.max(0, MAX_TESTCASES - uploadedTestcases.length));
+
+    const existingIndices = new Set(uploadedTestcases.map(testcase => testcase.index));
+    const existingContents = new Set(uploadedTestcases.map(testcase =>
+      testcase.contentSignature || contentSignature(testcase.inputPreview, testcase.expectedPreview)
+    ));
+    let nextIndex = uploadedTestcases.length ? Math.max(...uploadedTestcases.map(testcase => testcase.index)) + 1 : 1;
+    let duplicateCount = 0;
+    const newTestcases = [];
+    const newFiles = [];
+
+    for (const pair of pairsToAdd) {
+      const [inputContent, expectedContent] = await Promise.all([pair.in.text(), pair.out.text()]);
+      const contentKey = contentSignature(inputContent, expectedContent);
+      if (existingContents.has(contentKey)) {
+        duplicateCount += 1;
+        continue;
+      }
+
+      while (existingIndices.has(nextIndex)) nextIndex += 1;
+      const targetIndex = existingIndices.has(pair.originalIndex) ? nextIndex++ : pair.originalIndex;
+      const inputFile = new File([pair.in], `${targetIndex}.IN`, { type: pair.in.type || "text/plain" });
+      const outputFile = new File([pair.out], `${targetIndex}.OUT`, { type: pair.out.type || "text/plain" });
+
+      newFiles.push(inputFile, outputFile);
+      newTestcases.push({
+        index: targetIndex,
+        inputFile: inputFile.name,
+        outputFile: outputFile.name,
+        inputPreview: previewText(inputContent),
+        expectedPreview: previewText(expectedContent),
+        contentSignature: contentKey,
+        sourceFolder: pair.parentPath || null,
+        status: "P"
+      });
+      existingIndices.add(targetIndex);
+      existingContents.add(contentKey);
+      if (newTestcases.length % 8 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    if (newTestcases.length > 0) {
+      setFiles(previous => [...previous, ...newFiles]);
+      setUploadedTestcases(previous => [...previous, ...newTestcases].sort((a, b) => a.index - b.index));
+      setResult(null);
+    }
+
+    if (sourceType === "folder") {
+      const rootFolder = selected[0]?.webkitRelativePath?.split("/")[0] || "folder";
+      const summary = {
+        folderName: rootFolder,
+        scannedFiles: selected.length,
+        pairedTests: completePairs.length,
+        addedTests: newTestcases.length
+      };
+      setFolderScanSummary(summary);
+      showToast(
+        completePairs.length ? "success" : "warning",
+        t.toastFolderScanned || "Folder scanned",
+        `${rootFolder}: ${completePairs.length} ${t.testcase} (${newTestcases.length} ${t.toastReceived}).`
+      );
+    } else if (newTestcases.length > 0) {
+      showToast("success", t.toastUpload, `${t.toastReceived} ${newTestcases.length} ${t.testcase}.`);
+    }
+
+    if (duplicateCount > 0) {
+      showToast("warning", t.toastDuplicate, `${duplicateCount} ${t.toastDuplicateMsg}`);
+    }
+    if (completePairs.length > pairsToAdd.length) {
+      showToast("warning", t.toastError, `Maximum ${MAX_TESTCASES} testcases per run.`);
+    }
+  };
 
   const handleRun = async () => {
     if (!code.trim() || !uploadedTestcases.length) {
@@ -781,13 +841,19 @@ export default function App() {
       files.forEach(f => formData.append("files", f));
       
       const res = await fetch(`${API_BASE_URL}/api/judge`, { method: "POST", body: formData });
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await res.json()
+        : { message: `Judge API returned HTTP ${res.status}.` };
       if (!res.ok) throw new Error(data.message || t.toastError);
       setResult(data);
       showToast(data.status === "AC" ? "success" : "warning", t.toastCompleted, `${data.passedTests}/${data.totalTests} ${t.toastTestcaseAC}.`);
     } catch (err) {
-      setResult({ status: "SE", message: err.message, results: [] });
-      showToast("error", t.toastError, err.message);
+      const message = err instanceof TypeError
+        ? "Không thể kết nối tới backend chấm bài. Hãy chạy đầy đủ hệ thống bằng Docker Compose."
+        : err.message;
+      setResult({ status: "SE", message, results: [] });
+      showToast("error", t.toastError, message);
     } finally { setRunning(false); }
   };
 
@@ -795,9 +861,9 @@ export default function App() {
     if (!manualOutput.trim()) { showToast("warning", t.toastMissingOutput, t.toastMissingOutputMsg); return; }
     
     // Check duplicate content
-    const isDuplicate = uploadedTestcases.some(tc => 
-      tc.inputPreview === manualInput && 
-      tc.expectedPreview === manualOutput && 
+    const manualSignature = contentSignature(manualInput, manualOutput);
+    const isDuplicate = uploadedTestcases.some(tc =>
+      (tc.contentSignature || contentSignature(tc.inputPreview, tc.expectedPreview)) === manualSignature &&
       tc.index !== editingIndex
     );
     if (isDuplicate) {
@@ -810,7 +876,15 @@ export default function App() {
     const inFile = new File([manualInput], `${index}.IN`, { type: "text/plain" });
     const outFile = new File([manualOutput], `${index}.OUT`, { type: "text/plain" });
     setFiles([...nextFiles, inFile, outFile]);
-    const newTC = { index, inputFile: `${index}.IN`, outputFile: `${index}.OUT`, inputPreview: manualInput, expectedPreview: manualOutput, status: 'P' };
+    const newTC = {
+      index,
+      inputFile: `${index}.IN`,
+      outputFile: `${index}.OUT`,
+      inputPreview: previewText(manualInput),
+      expectedPreview: previewText(manualOutput),
+      contentSignature: manualSignature,
+      status: 'P'
+    };
     if (editingIndex !== null) setUploadedTestcases(uploadedTestcases.map(t => t.index === index ? newTC : t));
     else setUploadedTestcases([...uploadedTestcases, newTC]);
     setTestcaseModalOpen(false); setEditingIndex(null); setManualInput(""); setManualOutput(""); setResult(null);
@@ -818,9 +892,22 @@ export default function App() {
   };
 
   const confirmDeleteAll = () => setDeleteAllConfirmOpen(true);
-  const handleDeleteAll = () => { setUploadedTestcases([]); setFiles([]); setResult(null); setDeleteAllConfirmOpen(false); showToast("info", t.toastDeleted, t.toastDeletedAllMsg); };
+  const handleDeleteAll = () => { setUploadedTestcases([]); setFiles([]); setFolderScanSummary(null); setResult(null); setDeleteAllConfirmOpen(false); showToast("info", t.toastDeleted, t.toastDeletedAllMsg); };
 
-  const handleEdit = (idx) => { const tc = uploadedTestcases.find(t => t.index === idx); if (tc) { setManualInput(tc.inputPreview); setManualOutput(tc.expectedPreview); setEditingIndex(idx); setTestcaseModalOpen(true); } };
+  const handleEdit = async (idx) => {
+    const tc = uploadedTestcases.find(item => item.index === idx);
+    if (!tc) return;
+    const inputFile = files.find(file => file.name.toLowerCase() === `${idx}.in`);
+    const outputFile = files.find(file => file.name.toLowerCase() === `${idx}.out`);
+    const [input, output] = await Promise.all([
+      inputFile ? inputFile.text() : tc.inputPreview,
+      outputFile ? outputFile.text() : tc.expectedPreview
+    ]);
+    setManualInput(input);
+    setManualOutput(output);
+    setEditingIndex(idx);
+    setTestcaseModalOpen(true);
+  };
   const confirmDelete = (idx) => { setTargetDeleteIndex(idx); setDeleteConfirmOpen(true); };
   const handleDelete = () => {
     setUploadedTestcases(uploadedTestcases.filter(t => t.index !== targetDeleteIndex));
@@ -866,8 +953,6 @@ export default function App() {
 
   return (
     <div className="page">
-      <CustomCursor />
-      <NeuralBackground />
       <header className="header">
         <div className="header-left">
           <h1>{t.title}</h1>
@@ -920,24 +1005,26 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <Editor height={isFullScreen ? "calc(100vh - 60px)" : "500px"} language={language} theme={theme === "dark" ? "vs-dark" : "light"} value={code} onMount={setEditorRef} onChange={(v) => setCode(v || "")}
-              options={{ 
-                fontSize: 14, 
-                fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Courier New', monospace", 
-                fontLigatures: false, 
-                lineHeight: 22,
-                letterSpacing: 0, 
-                minimap: { enabled: false }, 
-                automaticLayout: true, 
-                padding: { top: 16, bottom: 16 }, 
-                cursorBlinking: "smooth", 
-                formatOnPaste: true, 
-                tabSize: 4, 
-                lineNumbersMinChars: 3, 
-                scrollBeyondLastLine: false, 
-                wordWrap: "on" 
-              }}
-            />
+            <Suspense fallback={<div className="editor-loading">Loading editor...</div>}>
+              <Editor height={isFullScreen ? "calc(100vh - 60px)" : "500px"} language={language} theme={theme === "dark" ? "vs-dark" : "light"} value={code} onMount={setEditorRef} onChange={(v) => setCode(v || "")}
+                options={{
+                  fontSize: 14,
+                  fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Courier New', monospace",
+                  fontLigatures: false,
+                  lineHeight: 22,
+                  letterSpacing: 0,
+                  minimap: { enabled: false },
+                  automaticLayout: true,
+                  padding: { top: 16, bottom: 16 },
+                  cursorBlinking: "solid",
+                  formatOnPaste: true,
+                  tabSize: 4,
+                  lineNumbersMinChars: 3,
+                  scrollBeyondLastLine: false,
+                  wordWrap: "on"
+                }}
+              />
+            </Suspense>
           </div>
         </section>
 
@@ -945,70 +1032,27 @@ export default function App() {
           <h2>{t.configuration}</h2>
           <label className="upload-box">
             <input type="file" multiple onChange={async (e) => {
-              const selected = Array.from(e.target.files);
-              
-              // Validate file size (1.5MB per file)
-              const MAX_SIZE = 1.5 * 1024 * 1024;
-              const validFiles = selected.filter(f => f.size <= MAX_SIZE);
-              const oversizedFiles = selected.filter(f => f.size > MAX_SIZE);
-              
-              if (oversizedFiles.length > 0) {
-                showToast("warning", t.toastFileTooLarge, `${t.toastFileTooLargeMsg}: ${oversizedFiles.map(f => f.name).join(", ")}`);
-              }
-
-              if (validFiles.length === 0) {
-                e.target.value = "";
-                return;
-              }
-
-              const entries = await Promise.all(validFiles.map(async f => ({ name: f.name, content: await f.text(), file: f })));
-              
-              const parsedBatch = (function parse(fileEntries) {
-                const map = new Map();
-                fileEntries.forEach(f => {
-                  const m = f.name.match(/^(\d+)\.(in|out)$/i); if (!m) return;
-                  const i = Number(m[1]), t = m[2].toLowerCase(); if (!map.has(i)) map.set(i, { index: i, files: [] });
-                  const tc = map.get(i); 
-                  if (t === "in") tc.inputPreview = f.content; 
-                  if (t === "out") tc.expectedPreview = f.content;
-                  tc.files.push(f.file);
-                });
-                return [...map.values()].filter(i => i.inputPreview !== undefined && i.expectedPreview !== undefined);
-              })(entries);
-
-              const existingIndices = new Set(uploadedTestcases.map(t => t.index));
-              const existingContents = new Set(uploadedTestcases.map(t => `${t.inputPreview}|||${t.expectedPreview}`));
-              
-              const finalToAdd = [];
-              let duplicateCount = 0;
-              let nextIndex = uploadedTestcases.length ? Math.max(...uploadedTestcases.map(t => t.index)) + 1 : 1;
-
-              parsedBatch.forEach(tc => {
-                if (existingContents.has(`${tc.inputPreview}|||${tc.expectedPreview}`)) {
-                  duplicateCount++;
-                } else {
-                  // If index exists, we assign a new one to avoid overwriting unless that's what's intended.
-                  // But usually for "uploading new files", we want to avoid collisions.
-                  const targetIndex = existingIndices.has(tc.index) ? nextIndex++ : tc.index;
-                  finalToAdd.push({ ...tc, index: targetIndex, status: "P" });
-                  existingIndices.add(targetIndex);
-                }
-              });
-
-              if (finalToAdd.length > 0) {
-                const newFiles = finalToAdd.flatMap(tc => tc.files);
-                setFiles(prev => [...prev, ...newFiles]);
-                setUploadedTestcases(prev => [...prev, ...finalToAdd].sort((a,b) => a.index - b.index));
-                showToast("success", t.toastUpload, `${t.toastReceived} ${finalToAdd.length} ${t.testcase}.`);
-              }
-
-              if (duplicateCount > 0) {
-                showToast("warning", t.toastDuplicate, `${duplicateCount} ${t.toastDuplicateMsg}`);
-              }
-              e.target.value = ""; // Clear input for same file re-upload
-              }} />            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginBottom: '8px'}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              await handleTestcaseSelection(e.target.files, "files");
+              e.target.value = "";
+            }} />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginBottom: '8px'}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             <span>{t.dropTestcases}</span>
           </label>
+          <label className="secondary-button folder-select-button">
+            <input type="file" multiple webkitdirectory="" directory="" onChange={async (e) => {
+              await handleTestcaseSelection(e.target.files, "folder");
+              e.target.value = "";
+            }} />
+            {t.selectTestcaseFolder || "Select testcase folder"}
+          </label>
+          {folderScanSummary && (
+            <div className="folder-scan-summary">
+              <strong>{folderScanSummary.folderName}</strong>
+              <span>{folderScanSummary.scannedFiles} files</span>
+              <span>{folderScanSummary.pairedTests} {t.testcase}</span>
+              <span>{folderScanSummary.addedTests} {t.toastReceived.toLowerCase()}</span>
+            </div>
+          )}
           <button className="secondary-button" onClick={() => { setEditingIndex(null); setManualInput(""); setManualOutput(""); setTestcaseModalOpen(true); }}>{t.manualTestcase}</button>
           <button className="run-button" disabled={running} onClick={handleRun}>{running ? t.judging : t.executeAll}</button>
           <div style={{ marginTop: '24px' }}>

@@ -1,126 +1,92 @@
 # Online Judge Starter
 
-Phan mem cham bai lap trinh bang testcase, chay noi bo bang Docker.
+Stateless online judge: frontend gui code va testcase den Express backend, backend goi Judge0 CE self-hosted va tra ket qua ngay. App khong luu submission va khong co database rieng.
 
-## Chuc nang
+## Kien truc
 
-- Chon ngon ngu: C, C++, Python, Java, C#, Pascal.
-- Dan code vao o nhap code.
-- Upload testcase dang `1.IN`, `1.OUT`, `2.IN`, `2.OUT`, ...
-- Them testcase truc tiep tren web bang modal nhap input va output dung; he thong tu dat so thu tu tiep theo.
-- Hien danh sach testcase hop le o phan ket qua ngay sau khi upload, trang thai ban dau la chua chay.
-- Bang ket qua co cot input, output thuc te va output dung; testcase `AC` an noi dung bang dau `-`, cac trang thai khac hien noi dung de doi chieu.
-- Goc phai phan ket qua hien tat ca trang thai dang co trong bo testcase, kem ten day du va so luong.
-- Co Mini Toast Notification System de thong bao upload testcase, them testcase, bat dau cham, ket qua cham va loi.
-- Hien tac gia Le Duy Hai tren trang Online Judge Starter.
-- Co nut mo modal thong tin lien he day du: Facebook, Zalo, TikTok, Discord, Instagram, LinkedIn, Kaggle, Email.
-- Bien dich/chay toan bo testcase.
-- Hien thi trang thai: `AC`, `WA`, `PE`, `TLE`, `MLE`, `OLE`, `ER`, `CE`, `NTD`, `SE`.
-- Tinh diem theo so testcase dung.
-- Thoi gian/testcase va bo nho duoc co dinh theo ngon ngu lap trinh.
-- Ho tro hot reload khi sua code trong project.
+```text
+Frontend -> POST /api/judge -> Node.js backend -> Judge0 CE internal API
+                                              -> Judge0 worker/isolate
+```
 
-## Cach chay
+- Frontend khong goi Judge0 truc tiep.
+- Backend khong compile/run code va khong dung `child_process`.
+- PostgreSQL va Redis trong Compose chi phuc vu Judge0.
+- Judge0 khong publish port ra host.
 
-Chi can cai Docker Desktop, sau do chay:
+## Chay local
+
+Development co password local mac dinh, nen co the chay ngay:
 
 ```bash
 docker compose up --build
 ```
 
-Mo trinh duyet:
+Mo `http://localhost:8080`. Lan dau Judge0 can tai image va khoi tao database nen co the mat vai phut.
 
-- Che do phat trien (Docker Compose): `http://localhost:8080`
-- Che do build san (Production): `http://localhost:3000`
+Khong chay rieng `cd client && npm run dev` neu can cham bai: lenh do chi khoi dong frontend, khong khoi dong backend/Judge0. Production van bat buoc dat password manh theo `.env.example`.
 
-Sau lan build/chay dau tien, khi sua code:
+Production:
 
-- Sua frontend trong `client/src/*`: trinh duyet tu cap nhat qua Vite HMR.
-- Sua backend trong `server/src/*`: backend tu restart bang `nodemon`.
-- Khong can build lai image hoac chay lai container cho thay doi code thong thuong.
-
-Chi can build/chay lai khi:
-
-- Sua `Dockerfile`.
-- Sua `docker-compose.yml`.
-- Them/xoa dependency trong `package.json`.
-- Container bi dung hoac loi can khoi dong lai.
-
-## Kien truc dev hien tai
-
-Trong Docker:
-
-- Vite dev server chay o port `8080`.
-- Express backend chay o port `3000`.
-- Vite proxy cac request `/api/*` sang `http://127.0.0.1:3000`.
-- Source code `client/` va `server/` duoc mount vao container bang Docker volume.
-
-## Gioi han theo ngon ngu
-
-Nguoi dung khong duoc tu chon thoi gian/testcase va bo nho. Frontend chi hien thi gia tri co dinh, backend tu ep limit theo `language`.
-
-| Ngon ngu | Thoi gian/testcase | Bo nho |
-| --- | ---: | ---: |
-| C | 2000 ms | 256 MB |
-| C++ | 1000 ms | 128 MB |
-| Pascal | 2000 ms | 256 MB |
-| Java | 3000 ms | 512 MB |
-| C# | 3000 ms | 512 MB |
-| Python | 5000 ms | 512 MB |
-
-## Sua thong tin tac gia va contact
-
-Tat ca thong tin tac gia nam trong:
-
-```text
-client/src/profileData.js
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Sua file nay de cap nhat ten tac gia, email va link Facebook, Zalo, TikTok, Discord, Instagram, LinkedIn, Kaggle.
+## API
 
-## Cau truc thu muc
+Frontend hien tai gui `multipart/form-data`:
 
-```text
-online-judge-starter/
-├── Agent.md
-├── Dockerfile
-├── docker-compose.yml
-├── README.md
-├── agent-images/
-│   └── README.md
-├── server/
-│   ├── package.json
-│   └── src/
-│       ├── server.js
-│       └── judge.js
-└── client/
-    ├── package.json
-    ├── index.html
-    ├── vite.config.js
-    └── src/
-        ├── profileData.js
-        ├── main.jsx
-        ├── App.jsx
-        └── style.css
+- `language`: `c`, `cpp`, `python`, `java`, `csharp`, `pascal`
+- `code`: source code
+- `files`: cac cap `1.IN` + `1.OUT`, `2.IN` + `2.OUT`, ...
+
+Frontend cho phep chon nhieu file hoac chon ca folder testcase. Khi chon folder, trinh duyet quet de quy, ghep cac file `N.IN`/`N.OUT` trong cung thu muc con, va thong bao so testcase hop le. File chi duoc gui den backend khi bam cham bai.
+
+Backend cung ho tro JSON voi `sourceCode` va mang `testcases`. Response van giu cac status cu `AC`, `WA`, `PE`, `TLE`, `MLE`, `OLE`, `ER`, `CE`, `SE` de tuong thich frontend, dong thoi bo sung `normalizedStatus`, `judge0Status`, `stdout`, `stderr`, `compileOutput`, `time`, va `memory`.
+
+## Cau hinh
+
+Bat buoc trong `.env`:
+
+- `JUDGE0_POSTGRES_PASSWORD`
+- `JUDGE0_REDIS_PASSWORD`
+
+Backend mac dinh goi `JUDGE0_URL=http://judge0-server:2358`. Co the override:
+
+- `JUDGE0_CPU_TIME_LIMIT`, `JUDGE0_WALL_TIME_LIMIT`, `JUDGE0_MEMORY_LIMIT` (KB)
+- `JUDGE0_MAX_MEMORY_LIMIT`: tran bo nho Judge0, mac dinh `524288` KB de khop voi limit 512 MiB cua Java/C#/Python
+- `JUDGE0_MAX_SOURCE_CODE_SIZE`, `JUDGE0_MAX_TESTCASES`
+- `JUDGE0_MAX_STDIN_SIZE`, `JUDGE0_MAX_EXPECTED_OUTPUT_SIZE`
+- `JUDGE0_REQUEST_TIMEOUT_MS`, `MAX_OUTPUT_BYTES`
+- `JUDGE0_TESTCASE_CONCURRENCY`: so testcase chay dong thoi sau testcase dau, mac dinh `4`; CE bat thuong duoc retry tuan tu
+- `JUDGE0_COMPILATION_RETRY_COUNT`: retry CE bat thuong sau khi testcase dau da compile thanh cong, mac dinh `2`
+- `JUDGE0_USE_BATCH`, `JUDGE0_BATCH_SIZE`: giao testcase con lai cho worker pool theo batch, mac dinh `true` va `20`
+- `JUDGE0_WORKER_COUNT`: so worker Judge0, mac dinh `8` de can bang throughput va tai nguyen tren Docker Desktop
+- `JUDGE_MAX_RESPONSE_FIELD_BYTES`: gioi han moi truong du lieu tra ve frontend, mac dinh `16384`
+- `JUDGE0_PER_PROCESS_LIMITS`: dat `true` tren Docker Desktop/cgroup v2; production cgroup v1 nen giu `false`
+- `JUDGE0_LANGUAGE_ID_C`, `JUDGE0_LANGUAGE_ID_CPP`, `JUDGE0_LANGUAGE_ID_PYTHON`, `JUDGE0_LANGUAGE_ID_JAVA`, `JUDGE0_LANGUAGE_ID_CSHARP`, `JUDGE0_LANGUAGE_ID_PASCAL`
+
+Language IDs phu thuoc version Judge0. Kiem tra `/languages` cua Judge0 trong internal network va pin `JUDGE0_IMAGE` trong production.
+
+Moi file testcase `.IN` hoac `.OUT` duoc gioi han toi da `2 MB` (`2097152` byte). Cac bien `JUDGE0_MAX_STDIN_SIZE` va `JUDGE0_MAX_EXPECTED_OUTPUT_SIZE` co the dat thap hon, nhung khong the nang tran vuot qua 2 MB.
+
+## Test
+
+```bash
+cd server
+npm test
 ```
 
-## Quy tac dat ten testcase
+Test nhanh API bang JSON:
 
-Dat file theo cap:
-
-```text
-1.IN
-1.OUT
-2.IN
-2.OUT
-3.IN
-3.OUT
+```bash
+curl -X POST http://localhost:3000/api/judge \
+  -H "Content-Type: application/json" \
+  -d '{"language":"cpp","sourceCode":"#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}","testcases":[{"input":"1 2\n","expectedOutput":"3\n"}]}'
 ```
 
-Ten file co the viet thuong hoac viet hoa, vi du `1.in`, `1.out` van duoc.
+Trong dev Compose, thay port `3000` bang `8080`.
 
-## Luu y bao mat
+## Gioi han
 
-Ban starter nay phu hop de chay noi bo, demo, hoc tap hoac dung trong phong may tin cay.
-
-Neu muon mo cho nguoi la nop bai tren Internet, can nang cap sang mo hinh sandbox rieng cho tung lan chay, gioi han network, CPU, RAM va quyen ghi file.
+Testcase dau duoc chay rieng de compilation error dung som. Cac testcase con lai chay dong thoi co gioi han de giam latency. Backend khong co queue va khong luu submission. Neu mo public, can bo sung rate limit/auth o lop API va pin/cau hinh Judge0 theo ha tang thuc te.

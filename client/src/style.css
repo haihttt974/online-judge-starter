@@ -64,7 +64,7 @@ body.editor-fullscreen-active {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: none !important;
+  cursor: pointer !important;
   transition: all 0.3s ease;
   font-weight: 600;
   color: var(--text-primary);
@@ -92,7 +92,7 @@ body.editor-fullscreen-active {
 
 .select-option {
   padding: 12px 16px;
-  cursor: none !important;
+  cursor: pointer !important;
   transition: all 0.2s ease;
   color: var(--text-primary);
   font-size: 0.9rem;
@@ -232,7 +232,7 @@ body.editor-fullscreen-active {
   gap: 14px;
   color: var(--text-primary);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: none !important;
+  cursor: pointer !important;
 }
 
 .settings-item:hover {
@@ -297,7 +297,7 @@ body.editor-fullscreen-active {
 .page {
   width: min(1380px, calc(100% - 48px));
   margin: 0 auto; padding: 60px 0;
-  position: relative; cursor: none !important;
+  position: relative; cursor: auto;
 }
 
 /* Professional Header */
@@ -326,7 +326,7 @@ body.editor-fullscreen-active {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: none !important;
+  cursor: pointer !important;
   box-shadow: 0 8px 25px var(--accent-glow);
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
@@ -366,14 +366,14 @@ body.editor-fullscreen-active {
   padding: 8px 20px; border-radius: 99px;
   font-weight: 700; font-size: 0.875rem;
   color: var(--text-primary); backdrop-filter: blur(10px);
-  cursor: none !important; transition: all 0.3s ease;
+  cursor: pointer !important; transition: all 0.3s ease;
 }
 
 .author-btn:hover { border-color: var(--accent); background-color: var(--accent-glow); transform: scale(1.05); }
 
 /* Glass Panels */
 .panel {
-  background: var(--glass-bg); backdrop-filter: blur(20px);
+  background: var(--glass-bg);
   border: 1px solid var(--glass-border); border-radius: 20px;
   padding: 32px; box-shadow: var(--panel-shadow);
 }
@@ -389,7 +389,6 @@ body.editor-fullscreen-active {
 
 .toast {
   background: var(--glass-bg); 
-  backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: 16px; 
   padding: 12px 16px; 
@@ -399,7 +398,7 @@ body.editor-fullscreen-active {
   animation: toastPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative; overflow: hidden;
   pointer-events: auto;
-  cursor: none !important;
+  cursor: default;
 }
 
 .toast::before {
@@ -428,12 +427,12 @@ body.editor-fullscreen-active {
 .toast-warning .toast-icon { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 
 .toast-close {
-  background: var(--bg-color); 
-  border: 1px solid var(--border-color); 
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
   color: var(--text-secondary);
   width: 24px; height: 24px;
   border-radius: 6px;
-  font-size: 1rem; cursor: none !important; 
+  font-size: 1rem; cursor: pointer !important;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.2s;
 }
@@ -497,7 +496,7 @@ body.editor-fullscreen-active .panel:has(.fullscreen) {
 
 .btn-icon {
   background: transparent; border: none; color: var(--text-secondary);
-  cursor: none !important; display: flex; align-items: center; justify-content: center;
+  cursor: pointer !important; display: flex; align-items: center; justify-content: center;
   padding: 4px; border-radius: 4px; transition: all 0.2s;
 }
 
@@ -539,7 +538,7 @@ body.editor-fullscreen-active .panel:has(.fullscreen) {
   display: flex; align-items: center; justify-content: center;
   background: var(--bg-color); border: 1px solid var(--border-color);
   color: var(--text-secondary); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: none !important;
+  cursor: pointer !important;
 }
 
 .btn-action-pro:hover {
@@ -575,16 +574,9 @@ body.editor-fullscreen-active .panel:has(.fullscreen) {
 
 .social-card label { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em; margin: 0; pointer-events: none; }
 
-/* Custom Cursor */
-.cursor-nucleus, .cursor-aura { position: fixed; top: 0; left: 0; pointer-events: none !important; z-index: 30000; will-change: transform; }
-.cursor-nucleus { width: 6px; height: 6px; background-color: var(--accent); border-radius: 1px; }
-.cursor-aura { width: 32px; height: 32px; border: 1px solid var(--accent); opacity: 0.5; transition: width 0.2s, height 0.2s, border-radius 0.2s, opacity 0.2s, background-color 0.2s, border-width 0.2s; }
-.cursor-aura.hover-pointer { width: 48px; height: 48px; opacity: 1; border-radius: 50%; border-width: 2px; background-color: var(--accent-glow); }
-.cursor-aura.hover-text { width: 2px; height: 24px; opacity: 1; border: none; background-color: var(--accent); }
-
 /* Uniform Modal Buttons */
 .modal-btn-group { display: flex; gap: 12px; margin-top: 32px; justify-content: flex-end; }
-.modal-btn { min-width: 140px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-weight: 700; font-size: 0.9rem; transition: all 0.3s ease; cursor: none !important; border: none; }
+.modal-btn { min-width: 140px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-weight: 700; font-size: 0.9rem; transition: all 0.3s ease; cursor: pointer !important; border: none; }
 .btn-primary { background: var(--accent); color: white; }
 .btn-ghost { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
@@ -598,6 +590,15 @@ body.editor-fullscreen-active .panel:has(.fullscreen) {
   border-radius: 12px; 
   overflow: hidden; 
   margin-bottom: 20px; 
+}
+
+.editor-loading {
+  height: 500px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-color);
+  color: var(--text-secondary);
+  font-weight: 700;
 }
 
 .monaco-editor {
@@ -627,19 +628,25 @@ label { display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; fon
 .score-card span { display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); }
 .score-card strong { display: block; font-size: 3rem; font-weight: 900; color: var(--accent); line-height: 1; margin: 4px 0; }
 
-.upload-box { min-height: 140px; border: 2px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: none !important; padding: 24px; background: var(--bg-color); text-align: center; margin-bottom: 20px; }
+.upload-box { min-height: 140px; border: 2px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer !important; padding: 24px; background: var(--bg-color); text-align: center; margin-bottom: 20px; }
+.upload-box { cursor: pointer !important; }
 .upload-box:hover { border-color: var(--accent); background-color: var(--accent-glow); }
 
-.run-button { width: 100%; border: none; border-radius: 12px; padding: 16px; background: var(--accent); color: #fff; font-weight: 800; font-size: 1rem; cursor: none !important; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 10px 20px -5px var(--accent-glow); }
+.run-button { width: 100%; border: none; border-radius: 12px; padding: 16px; background: var(--accent); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer !important; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 10px 20px -5px var(--accent-glow); }
 .run-button:hover { transform: translateY(-2px); filter: brightness(1.1); }
 
-.secondary-button { width: 100%; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; background: var(--glass-bg); color: var(--text-primary); font-weight: 700; cursor: none !important; margin-bottom: 12px; }
+.secondary-button { width: 100%; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; background: var(--glass-bg); color: var(--text-primary); font-weight: 700; cursor: pointer !important; margin-bottom: 12px; }
 .secondary-button:hover { border-color: var(--accent); }
+.folder-select-button { display: block; text-align: center; }
+.folder-select-button input[type="file"] { display: none; }
+.folder-scan-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 12px; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--glass-bg); font-size: 0.78rem; color: var(--text-secondary); }
+.folder-scan-summary strong { grid-column: 1 / -1; overflow: hidden; color: var(--text-primary); text-overflow: ellipsis; white-space: nowrap; }
 
 /* Table Style */
 .table-wrap { width: 100%; overflow: hidden; }
 table { width: 100%; border-collapse: collapse; min-width: 1000px; }
 th, td { padding: 16px 20px; text-align: left; border-bottom: 1px solid var(--border-color); }
+tbody tr { content-visibility: auto; contain-intrinsic-size: 84px; }
 th { background: var(--bg-color); font-size: 0.7rem; font-weight: 900; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.1em; }
 .status { padding: 6px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
 .status-ac { background: rgba(16, 185, 129, 0.1); color: #10b981; }
@@ -652,3 +659,8 @@ th { background: var(--bg-color); font-size: 0.7rem; font-weight: 900; text-tran
 .case-textarea:focus { border-color: var(--accent); }
 
 @media (max-width: 1024px) { .layout { grid-template-columns: 1fr; } .header h1 { font-size: 2.5rem; } }
+
+/* Performance-first defaults: native cursor and lightweight motion. */
+.page { cursor: auto !important; }
+button, a, .upload-box, .folder-select-button, .select-trigger, .select-option { cursor: pointer !important; }
+input, textarea, .monaco-editor { cursor: text !important; }

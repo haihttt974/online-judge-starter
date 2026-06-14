@@ -10,7 +10,18 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://127.0.0.1:3000",
-        changeOrigin: true
+        changeOrigin: true,
+        configure(proxy) {
+          proxy.on("error", (_, __, response) => {
+            if (!response.headersSent) {
+              response.writeHead(503, { "Content-Type": "application/json" });
+            }
+            response.end(JSON.stringify({
+              status: "SE",
+              message: "Backend is unavailable. Start the full stack with: docker compose up --build"
+            }));
+          });
+        }
       }
     }
   }
