@@ -29,6 +29,8 @@ const judgeConfig = {
   compilationRetryCount: Math.max(0, Math.floor(readPositiveNumber("JUDGE0_COMPILATION_RETRY_COUNT", 2))),
   maxResponseFieldBytes: readPositiveNumber("JUDGE_MAX_RESPONSE_FIELD_BYTES", 16 * 1024),
   pollIntervalMs: Math.max(50, Math.floor(readPositiveNumber("JUDGE0_POLL_INTERVAL_MS", 100))),
+  connectRetryCount: Math.max(0, Math.floor(readPositiveNumber("JUDGE0_CONNECT_RETRY_COUNT", 3))),
+  connectRetryDelayMs: Math.max(100, Math.floor(readPositiveNumber("JUDGE0_CONNECT_RETRY_DELAY_MS", 1000))),
   perProcessLimits: readBoolean("JUDGE0_PER_PROCESS_LIMITS"),
   requestTimeoutMs: readPositiveNumber("JUDGE0_REQUEST_TIMEOUT_MS", 60000)
 };

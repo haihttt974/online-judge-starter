@@ -11,41 +11,77 @@ class Judge0Error extends Error {
 
 let languagesCache = null;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableFetchError(error) {
+  const code = String(error?.cause?.code || error?.code || "");
+  return (
+    error?.name === "AbortError" ||
+    code === "ECONNREFUSED" ||
+    code === "ENOTFOUND" ||
+    code === "EAI_AGAIN" ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "EHOSTUNREACH" ||
+    code === "ENETUNREACH"
+  );
+}
+
+function isRetryableStatus(status) {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
 async function judge0Request(path, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), judgeConfig.requestTimeoutMs);
+  const maxAttempts = Math.max(1, judgeConfig.connectRetryCount + 1);
 
-  try {
-    const response = await fetch(`${judgeConfig.judge0Url}${path}`, {
-      ...options,
-      headers: {
-        "content-type": "application/json",
-        ...(options.headers || {})
-      },
-      signal: controller.signal
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), judgeConfig.requestTimeoutMs);
 
-    const body = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Judge0Error("Judge service returned an error.", {
-        code: "JUDGE0_API_ERROR",
-        statusCode: response.status === 429 ? 503 : 502
+    try {
+      const response = await fetch(`${judgeConfig.judge0Url}${path}`, {
+        ...options,
+        headers: {
+          "content-type": "application/json",
+          ...(options.headers || {})
+        },
+        signal: controller.signal
       });
-    }
 
-    return body;
-  } catch (error) {
-    if (error instanceof Judge0Error) throw error;
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (attempt < maxAttempts && isRetryableStatus(response.status)) {
+          await sleep(judgeConfig.connectRetryDelayMs * attempt);
+          continue;
+        }
 
-    throw new Judge0Error(
-      error.name === "AbortError" ? "Judge service request timed out." : "Judge service unavailable.",
-      {
-        code: error.name === "AbortError" ? "JUDGE0_TIMEOUT" : "JUDGE0_UNAVAILABLE",
-        statusCode: 503
+        throw new Judge0Error("Judge service returned an error.", {
+          code: "JUDGE0_API_ERROR",
+          statusCode: response.status === 429 ? 503 : 502
+        });
       }
-    );
-  } finally {
-    clearTimeout(timer);
+
+      return body;
+    } catch (error) {
+      if (error instanceof Judge0Error) throw error;
+
+      if (attempt < maxAttempts && isRetryableFetchError(error)) {
+        await sleep(judgeConfig.connectRetryDelayMs * attempt);
+        continue;
+      }
+
+      throw new Judge0Error(
+        error.name === "AbortError" ? "Judge service request timed out." : "Judge service unavailable.",
+        {
+          code: error.name === "AbortError" ? "JUDGE0_TIMEOUT" : "JUDGE0_UNAVAILABLE",
+          statusCode: 503
+        }
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 

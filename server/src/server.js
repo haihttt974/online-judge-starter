@@ -3,6 +3,7 @@ const cors = require("cors");
 const multer = require("multer");
 const path = require("path");
 const { Judge0Error, JudgeRequestError, judgeSubmission, getLanguageLimits } = require("./judge");
+const { getJudge0Languages } = require("./services/judge0Client");
 const judgeConfig = require("./config/judgeConfig");
 
 const app = express();
@@ -88,6 +89,36 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Judge app is running at http://localhost:${PORT}`);
-});
+async function waitForJudge0BeforeStart() {
+  if (String(process.env.JUDGE0_WAIT_ON_START || "true").toLowerCase() === "false") {
+    return;
+  }
+
+  const attempts = Math.max(1, judgeConfig.connectRetryCount + 1);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await getJudge0Languages();
+      return;
+    } catch (error) {
+      if (attempt === attempts) {
+        console.warn("Judge0 is not ready yet. The API will still start, but judging may fail until Judge0 becomes available.");
+        return;
+      }
+
+      const delayMs = judgeConfig.connectRetryDelayMs * attempt;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
+(async () => {
+  try {
+    await waitForJudge0BeforeStart();
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Judge app is running at http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start judge app:", error);
+    process.exit(1);
+  }
+})();

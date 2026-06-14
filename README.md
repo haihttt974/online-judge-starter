@@ -60,11 +60,15 @@ Backend mac dinh goi `JUDGE0_URL=http://judge0-server:2358`. Co the override:
 - `JUDGE0_REQUEST_TIMEOUT_MS`, `MAX_OUTPUT_BYTES`
 - `JUDGE0_TESTCASE_CONCURRENCY`: so testcase chay dong thoi sau testcase dau, mac dinh `4`; CE bat thuong duoc retry tuan tu
 - `JUDGE0_COMPILATION_RETRY_COUNT`: retry CE bat thuong sau khi testcase dau da compile thanh cong, mac dinh `2`
+- `JUDGE0_CONNECT_RETRY_COUNT`, `JUDGE0_CONNECT_RETRY_DELAY_MS`: retry ket noi/5xx voi Judge0 khi service khoi dong cham, mac dinh `3` lan va `1000ms`
+- `JUDGE0_WAIT_ON_START`: neu `true` thi backend doi Judge0 san sang truoc khi nghe request, mac dinh `true`
 - `JUDGE0_USE_BATCH`, `JUDGE0_BATCH_SIZE`: giao testcase con lai cho worker pool theo batch, mac dinh `true` va `20`
 - `JUDGE0_WORKER_COUNT`: so worker Judge0, mac dinh `8` de can bang throughput va tai nguyen tren Docker Desktop
 - `JUDGE_MAX_RESPONSE_FIELD_BYTES`: gioi han moi truong du lieu tra ve frontend, mac dinh `16384`
 - `JUDGE0_PER_PROCESS_LIMITS`: dat `true` tren Docker Desktop/cgroup v2; production cgroup v1 nen giu `false`
 - `JUDGE0_LANGUAGE_ID_C`, `JUDGE0_LANGUAGE_ID_CPP`, `JUDGE0_LANGUAGE_ID_PYTHON`, `JUDGE0_LANGUAGE_ID_JAVA`, `JUDGE0_LANGUAGE_ID_CSHARP`, `JUDGE0_LANGUAGE_ID_PASCAL`
+
+Luu y deploy: `JUDGE0_URL=http://judge0-server:2358` chi dung khi backend va Judge0 chay cung Docker network. Neu frontend deploy rieng (vi du GitHub Pages), backend van phai nam o mot URL live va backend do phai co Judge0 reachable.
 
 Language IDs phu thuoc version Judge0. Kiem tra `/languages` cua Judge0 trong internal network va pin `JUDGE0_IMAGE` trong production.
 
