@@ -24,16 +24,11 @@ function readJudge0Urls() {
 }
 
 const MAX_TESTCASE_FILE_BYTES = 2 * 1024 * 1024;
+const judge0Urls = readJudge0Urls();
 
 const judgeConfig = {
-  judge0Urls: (() => {
-    const urls = readJudge0Urls();
-    return urls;
-  })(),
-  judge0Url: (() => {
-    const urls = readJudge0Urls();
-    return urls[0];
-  })(),
+  judge0Urls,
+  judge0Url: judge0Urls[0],
   cpuTimeLimit: readPositiveNumber("JUDGE0_CPU_TIME_LIMIT", 2),
   wallTimeLimit: readPositiveNumber("JUDGE0_WALL_TIME_LIMIT", 5),
   memoryLimitKb: readPositiveNumber("JUDGE0_MEMORY_LIMIT", 128000),

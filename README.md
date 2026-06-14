@@ -62,6 +62,7 @@ Backend mac dinh goi `JUDGE0_URL=http://judge0-server:2358`. Co the override:
 - `JUDGE0_COMPILATION_RETRY_COUNT`: retry CE bat thuong sau khi testcase dau da compile thanh cong, mac dinh `2`
 - `JUDGE0_CONNECT_RETRY_COUNT`, `JUDGE0_CONNECT_RETRY_DELAY_MS`: retry ket noi/5xx voi Judge0 khi service khoi dong cham, mac dinh `3` lan va `1000ms`
 - `JUDGE0_WAIT_ON_START`: neu `true` thi backend doi Judge0 san sang truoc khi nghe request, mac dinh `true`
+- `JUDGE0_URLS`: danh sach URL Judge0 phan cach bang dau phay; backend se thu lan luot theo thu tu
 - `JUDGE0_USE_BATCH`, `JUDGE0_BATCH_SIZE`: giao testcase con lai cho worker pool theo batch, mac dinh `true` va `20`
 - `JUDGE0_WORKER_COUNT`: so worker Judge0, mac dinh `8` de can bang throughput va tai nguyen tren Docker Desktop
 - `JUDGE_MAX_RESPONSE_FIELD_BYTES`: gioi han moi truong du lieu tra ve frontend, mac dinh `16384`
