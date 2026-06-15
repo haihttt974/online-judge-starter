@@ -32,8 +32,7 @@ Also supported:
 
 The response keeps legacy statuses `AC`, `WA`, `PE`, `TLE`, `MLE`, `OLE`, `ER`, `CE`, `SE` and preview fields used by `client/src/App.jsx`. New detailed fields include `normalizedStatus`, `passed`, `judge0Status`, `stdout`, `stderr`, `compileOutput`, `time`, and `memory`.
 
-The first testcase runs alone so compilation errors stop immediately. Remaining testcases use Judge0's Batch API and worker pool while preserving response order. Runtime error and TLE do not stop subsequent testcases.
-If the first testcase compiles but a later testcase reports CE, the backend retries it sequentially because Judge0 recompiles every testcase and concurrent isolate pressure can produce transient failures.
+Compose enables `JUDGE0_COMPILE_ONCE` for C, C++, Pascal, C#, and Python. It sends one Judge0 multi-file submission containing the source, optional compile script, run script, and every testcase input. Java retains the fallback path because Judge0 1.13.1's JVM does not run reliably on Docker Desktop/cgroup v2.
 
 ## Security boundaries
 
@@ -64,6 +63,9 @@ Primary backend config:
 - `JUDGE0_MAX_EXPECTED_OUTPUT_SIZE`
 - `JUDGE0_REQUEST_TIMEOUT_MS`
 - `JUDGE0_TESTCASE_CONCURRENCY`
+- `JUDGE0_COMPILE_ONCE`
+- `JUDGE0_COMPILE_ONCE_MAX_CPU_SECONDS`
+- `JUDGE0_COMPILE_ONCE_MAX_WALL_SECONDS`
 - `JUDGE0_PER_PROCESS_LIMITS` enables a cgroup-v2-compatible Judge0 mode; dev Compose sets it to `true`.
 - `MAX_OUTPUT_BYTES`
 

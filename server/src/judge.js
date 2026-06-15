@@ -1,7 +1,8 @@
 const path = require("path");
 const judgeConfig = require("./config/judgeConfig");
 const { LANGUAGE_MAP, getJudge0LanguageId } = require("./config/judge0Languages");
-const { Judge0Error, getJudge0Languages, runCodeBatch, runCodeWithTestcase } = require("./services/judge0Client");
+const { Judge0Error, getJudge0Languages, runCodeBatch, runCodeWithTestcase, runMultiFileProject } = require("./services/judge0Client");
+const { createProjectArchive, parseProjectResults } = require("./services/multiFileRunner");
 const { compareOutput, normalizeTokens } = require("./services/outputCompare");
 
 const LANGUAGE_LIMITS = {
@@ -205,6 +206,49 @@ async function ensureLanguageIsAvailable(language, languageId) {
   }
 }
 
+async function judgeCompileOnce({ language, code, testcases, limits, maxOutputBytes }) {
+  await ensureLanguageIsAvailable("Multi-file program", judgeConfig.multiFileLanguageId);
+  const perTestWallSeconds = Math.max(judgeConfig.wallTimeLimit, limits.timeLimitMs / 1000 + 1);
+  const additionalFiles = createProjectArchive({
+    language,
+    sourceCode: code,
+    testcases,
+    perTestWallSeconds,
+    previewBytes: Math.min(maxOutputBytes, judgeConfig.maxResponseFieldBytes)
+  });
+  const raw = await runMultiFileProject({
+    additionalFiles,
+    languageId: judgeConfig.multiFileLanguageId,
+    timeLimit: Math.min(judgeConfig.compileOnceMaxCpuSeconds, Math.max(1, (limits.timeLimitMs / 1000) * testcases.length)),
+    wallTimeLimit: Math.min(judgeConfig.compileOnceMaxWallSeconds, Math.max(1, perTestWallSeconds * testcases.length)),
+    memoryLimit: limits.memoryLimitMb * 1024
+  });
+
+  if (Number(raw?.status?.id) === 6) {
+    return [normalizeJudge0Result(raw, testcases[0], maxOutputBytes)];
+  }
+
+  const parsedByIndex = new Map(parseProjectResults(raw?.stdout).map((result) => [result.index, result]));
+  return testcases.map((testcase) => {
+    const parsed = parsedByIndex.get(testcase.index);
+    const timedOut = parsed?.exitCode === 124 || parsed?.exitCode === 137;
+    const resultRaw = parsed ? {
+      stdout: parsed.stdout,
+      stderr: parsed.stderr,
+      status: timedOut
+        ? { id: 5, description: "Time Limit Exceeded" }
+        : parsed.exitCode === 0
+          ? { id: 3, description: "Accepted" }
+          : { id: 11, description: "Runtime Error (NZEC)" }
+    } : {
+      stdout: "",
+      stderr: String(raw?.stderr || ""),
+      status: raw?.status || { id: 13, description: "Internal Error" }
+    };
+    return normalizeJudge0Result(resultRaw, testcase, maxOutputBytes);
+  });
+}
+
 async function mapWithConcurrency(items, concurrency, mapper) {
   const results = new Array(items.length);
   let nextIndex = 0;
@@ -243,6 +287,31 @@ async function judgeSubmission({ language, code, sourceCode, files, testcases, m
   );
 
   await ensureLanguageIsAvailable(language, languageId);
+
+  if (judgeConfig.compileOnce && judgeConfig.compileOnceLanguages.includes(language)) {
+    const results = await judgeCompileOnce({
+      language,
+      code: effectiveCode,
+      testcases: effectiveTestcases,
+      limits,
+      maxOutputBytes: effectiveMaxOutputBytes
+    });
+    const passedTests = results.filter((result) => result.passed).length;
+    const status = finalLegacyStatus(results);
+    return {
+      status,
+      normalizedStatus: normalizedStatus(status),
+      message: status === "AC" ? "All testcases passed." : resultMessage(status),
+      totalTests: effectiveTestcases.length,
+      executedTests: results.length,
+      passedTests,
+      score: Number(((passedTests / effectiveTestcases.length) * 100).toFixed(2)),
+      timeLimitMs: limits.timeLimitMs,
+      memoryLimitMb: limits.memoryLimitMb,
+      compileOutput: results.find((result) => result.status === "CE")?.compileOutput || "",
+      results
+    };
+  }
 
   async function runTestcase(testcase) {
     const raw = await runCodeWithTestcase({

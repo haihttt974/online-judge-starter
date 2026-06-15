@@ -58,6 +58,9 @@ Backend mac dinh goi `JUDGE0_URL=http://judge0-server:2358`. Co the override:
 - `JUDGE0_MAX_SOURCE_CODE_SIZE`, `JUDGE0_MAX_TESTCASES`
 - `JUDGE0_MAX_STDIN_SIZE`, `JUDGE0_MAX_EXPECTED_OUTPUT_SIZE`
 - `JUDGE0_REQUEST_TIMEOUT_MS`, `MAX_OUTPUT_BYTES`
+- `JUDGE0_COMPILE_ONCE`: compile mot lan va chay tat ca testcase trong mot multi-file submission, mac dinh `true` trong Compose
+- `JUDGE0_COMPILE_ONCE_LANGUAGES`: cac ngon ngu dung multi-file compile-once; mac dinh `c,cpp,pascal,csharp,python`
+- `JUDGE0_COMPILE_ONCE_MAX_CPU_SECONDS`, `JUDGE0_COMPILE_ONCE_MAX_WALL_SECONDS`: gioi han tong cho submission chua tat ca testcase
 - `JUDGE0_TESTCASE_CONCURRENCY`: so testcase chay dong thoi sau testcase dau, mac dinh `4`; CE bat thuong duoc retry tuan tu
 - `JUDGE0_COMPILATION_RETRY_COUNT`: retry CE bat thuong sau khi testcase dau da compile thanh cong, mac dinh `2`
 - `JUDGE0_CONNECT_RETRY_COUNT`, `JUDGE0_CONNECT_RETRY_DELAY_MS`: retry ket noi/5xx voi Judge0 khi service khoi dong cham, mac dinh `3` lan va `1000ms`
@@ -94,4 +97,4 @@ Trong dev Compose, thay port `3000` bang `8080`.
 
 ## Gioi han
 
-Testcase dau duoc chay rieng de compilation error dung som. Cac testcase con lai chay dong thoi co gioi han de giam latency. Backend khong co queue va khong luu submission. Neu mo public, can bo sung rate limit/auth o lop API va pin/cau hinh Judge0 theo ha tang thuc te.
+Trong Docker Compose, backend dung mot multi-file submission cho C, C++, Pascal, C# va Python, sau do chay tat ca testcase trong cung submission. Java giu duong fallback do JVM cua Judge0 1.13.1 khong tuong thich tot voi Docker Desktop/cgroup v2. Co the tat che do compile-once bang `JUDGE0_COMPILE_ONCE=false`.

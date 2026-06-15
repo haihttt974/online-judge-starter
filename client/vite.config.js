@@ -1,28 +1,24 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
-  plugins: [react()],
-  base: "/online-judge-starter/",
-  server: {
-    host: "0.0.0.0",
-    port: 8080,
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:3000",
-        changeOrigin: true,
-        configure(proxy) {
-          proxy.on("error", (_, __, response) => {
-            if (!response.headersSent) {
-              response.writeHead(503, { "Content-Type": "application/json" });
-            }
-            response.end(JSON.stringify({
-              status: "SE",
-              message: "Backend is unavailable. Start the full stack with: docker compose up --build"
-            }));
-          });
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  // Default to "/" for local development and standard production builds.
+  // Use "/online-judge-starter/" only when explicitly building for GitHub Pages.
+  const base = env.VITE_DEPLOY_TARGET === "gh-pages" ? "/online-judge-starter/" : "/";
+  
+  return {
+    plugins: [react()],
+    base: base,
+    server: {
+      host: "0.0.0.0",
+      port: 8080,
+      proxy: {
+        "/api": {
+          target: "http://127.0.0.1:3000",
+          changeOrigin: true
         }
       }
     }
-  }
+  };
 });

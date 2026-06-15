@@ -87,6 +87,7 @@ async function judge0Request(path, options = {}) {
             await sleep(judgeConfig.connectRetryDelayMs * attempt);
             continue;
           }
+          if (!error.retryable) throw error;
           break;
         }
 
@@ -181,6 +182,32 @@ function submissionPayload({
   };
 }
 
+async function runMultiFileProject({ additionalFiles, languageId, timeLimit, wallTimeLimit, memoryLimit }) {
+  const result = await judge0Request("/submissions?base64_encoded=true&wait=true", {
+    method: "POST",
+    body: JSON.stringify({
+      additional_files: additionalFiles,
+      language_id: languageId,
+      cpu_time_limit: timeLimit,
+      wall_time_limit: wallTimeLimit,
+      memory_limit: memoryLimit,
+      max_file_size: Math.ceil(judgeConfig.maxOutputBytes / 1024),
+      enable_per_process_and_thread_time_limit: judgeConfig.perProcessLimits,
+      enable_per_process_and_thread_memory_limit: judgeConfig.perProcessLimits,
+      enable_network: false
+    })
+  });
+  if (!result?.status?.id) {
+    throw new Judge0Error("Judge service returned an incomplete multi-file submission result.");
+  }
+  for (const field of ["stdout", "stderr", "compile_output", "message"]) {
+    if (typeof result[field] === "string") {
+      result[field] = Buffer.from(result[field], "base64").toString("utf8");
+    }
+  }
+  return result;
+}
+
 async function runCodeWithTestcase({
   sourceCode,
   languageId,
@@ -235,6 +262,7 @@ module.exports = {
   createSubmission,
   getJudge0Languages,
   runCodeBatch,
+  runMultiFileProject,
   runCodeWithTestcase,
   waitForSubmission
 };

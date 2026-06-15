@@ -76,6 +76,7 @@ echo [4/4] Deploy GitHub Pages tu commit vua push...
 pushd "%WORKTREE_DIR%\client" || goto :cleanup_fail
 call npm ci
 if errorlevel 1 goto :cleanup_fail_pop
+set VITE_DEPLOY_TARGET=gh-pages
 call npm run deploy
 if errorlevel 1 goto :cleanup_fail_pop
 popd

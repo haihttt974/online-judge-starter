@@ -849,9 +849,14 @@ export default function App() {
       setResult(data);
       showToast(data.status === "AC" ? "success" : "warning", t.toastCompleted, `${data.passedTests}/${data.totalTests} ${t.toastTestcaseAC}.`);
     } catch (err) {
-      const message = err instanceof TypeError
-        ? "Không thể kết nối tới backend chấm bài. Hãy chạy đầy đủ hệ thống bằng Docker Compose."
-        : err.message;
+      let message = err.message;
+      if (err instanceof TypeError) {
+        if (window.location.hostname.includes("github.io")) {
+          message = "Judge service unavailable. GitHub Pages is static-only; you must host the backend separately and set VITE_API_URL.";
+        } else {
+          message = "Không thể kết nối tới backend chấm bài. Hãy chạy đầy đủ hệ thống bằng Docker Compose.";
+        }
+      }
       setResult({ status: "SE", message, results: [] });
       showToast("error", t.toastError, message);
     } finally { setRunning(false); }

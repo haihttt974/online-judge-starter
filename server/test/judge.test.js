@@ -69,6 +69,7 @@ after(() => new Promise((resolve) => mockJudge0.close(resolve)));
 
 const { Judge0Error, JudgeRequestError, judgeSubmission, validateJudgeRequest } = require("../src/judge");
 const { compareOutput, normalizeOutput } = require("../src/services/outputCompare");
+const { createProjectArchive, parseProjectResults } = require("../src/services/multiFileRunner");
 
 function testcases(count = 1) {
   return Array.from({ length: count }, (_, index) => ({
@@ -81,6 +82,20 @@ function testcases(count = 1) {
 test("output comparison preserves legacy CRLF and trailing-whitespace behavior", () => {
   assert.equal(normalizeOutput("a  \r\nb\t\r\n"), "a\nb");
   assert.equal(compareOutput("a  \r\nb\t\r\n", "a\nb\n"), true);
+});
+
+test("compile-once project archive and framed results are generated safely", () => {
+  const archive = Buffer.from(createProjectArchive({
+    language: "cpp",
+    sourceCode: "int main(){}",
+    testcases: [{ index: 1, input: "input\n" }],
+    perTestWallSeconds: 2,
+    previewBytes: 1024
+  }), "base64");
+  assert.equal(archive.readUInt32LE(0), 0x04034b50);
+
+  const parsed = parseProjectResults("__OJ_RESULT__\t1\t0\tb2sK\t\n");
+  assert.deepEqual(parsed, [{ index: 1, exitCode: 0, stdout: "ok\n", stderr: "" }]);
 });
 
 test("C++ accepted and wrong answer are normalized to legacy response fields", async () => {
