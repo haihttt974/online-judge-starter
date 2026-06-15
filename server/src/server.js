@@ -25,8 +25,17 @@ app.use(express.json({ limit: judgeConfig.maxSourceCodeBytes + judgeConfig.maxTe
 const clientDistPath = path.join(__dirname, "../../client/dist");
 app.use(express.static(clientDistPath));
 
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true, message: "Judge server is running" });
+app.get("/api/health", async (req, res) => {
+  try {
+    await getJudge0Languages();
+    res.json({ ok: true, judgeReady: true, message: "Judge server is running" });
+  } catch (_) {
+    res.status(503).json({
+      ok: false,
+      judgeReady: false,
+      message: "Judge server is running, but Judge0 is unavailable."
+    });
+  }
 });
 
 // TODO: Add deployment-level authentication/rate limiting before exposing this API publicly.

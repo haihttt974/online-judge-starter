@@ -15,6 +15,11 @@ RUN cd client && npm run build
 
 WORKDIR /app/server
 
+ENV NODE_ENV=production \
+    JUDGE0_URL=https://ce.judge0.com \
+    JUDGE0_COMPILE_ONCE=false \
+    JUDGE0_WAIT_ON_START=true
+
 EXPOSE 3000
 
 CMD ["node", "src/server.js"]

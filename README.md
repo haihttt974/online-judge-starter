@@ -74,6 +74,8 @@ Backend mac dinh goi `JUDGE0_URL=http://judge0-server:2358`. Co the override:
 
 Luu y deploy: `JUDGE0_URL=http://judge0-server:2358` chi dung khi backend va Judge0 chay cung Docker network. Neu frontend deploy rieng (vi du GitHub Pages), backend van phai nam o mot URL live va backend do phai co Judge0 reachable.
 
+Image `Dockerfile` deploy don le (vi du Render) mac dinh goi `https://ce.judge0.com` va tat compile-once, vi dich vu deploy don le khong chay duoc Judge0 worker noi bo. Day la dich vu Judge0 cong cong; production nghiem tuc nen deploy `docker-compose.prod.yml` tren VPS rieng va dat `VITE_API_URL` ve VPS do.
+
 Language IDs phu thuoc version Judge0. Kiem tra `/languages` cua Judge0 trong internal network va pin `JUDGE0_IMAGE` trong production.
 
 Moi file testcase `.IN` hoac `.OUT` duoc gioi han toi da `2 MB` (`2097152` byte). Cac bien `JUDGE0_MAX_STDIN_SIZE` va `JUDGE0_MAX_EXPECTED_OUTPUT_SIZE` co the dat thap hon, nhung khong the nang tran vuot qua 2 MB.
